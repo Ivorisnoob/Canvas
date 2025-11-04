@@ -4,11 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -26,7 +23,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -81,9 +77,9 @@ class MainActivity : ComponentActivity() {
 
                     Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
                         Text("Paper Todo", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(8.dp))
-                        TaskList(tasks = tasks, vm = vm)
+                        TaskList(tasks = tasks, vm = vm, modifier = Modifier.weight(1f))
 
-                        // Simple add task area
+                        // Add task area at bottom
                         AddTaskBar(vm = vm)
                     }
                 }
@@ -103,9 +99,10 @@ fun deserializePath(data: String): List<Offset> = data.split(";").mapNotNull {
 }
 
 @Composable
-fun TaskList(tasks: List<com.sameerasw.doodlist.data.TaskEntity>, vm: TaskViewModel) {
-    LazyColumn {
-        items(tasks, key = { it.id }) { task ->
+fun TaskList(tasks: List<com.sameerasw.doodlist.data.TaskEntity>, vm: TaskViewModel, modifier: Modifier = Modifier) {
+    val sortedTasks = tasks.sortedBy { it.isDone }
+    LazyColumn(modifier = modifier) {
+        items(sortedTasks, key = { it.id }) { task ->
             TaskItem(task = task, vm = vm)
         }
     }
@@ -147,7 +144,7 @@ fun TaskItem(task: com.sameerasw.doodlist.data.TaskEntity, vm: TaskViewModel) {
             Box(modifier = Modifier
                 .height(72.dp)
                 .fillMaxWidth()
-                .background(Color(0xFFFFFDF5))) {
+                .background(if (task.isDone) Color(0xFFE8E8E8) else Color(0xFFFFFDF5))) {
 
                 // Task text and drawing overlay
                 Box(modifier = Modifier.fillMaxWidth()) {
@@ -200,6 +197,20 @@ fun TaskItem(task: com.sameerasw.doodlist.data.TaskEntity, vm: TaskViewModel) {
                     Icon(Icons.Default.Edit, contentDescription = "Edit")
                 }
             )
+            if (task.isDone) {
+                DropdownMenuItem(
+                    text = { Text("Mark undone") },
+                    onClick = {
+                        scope.launch {
+                            vm.markUndone(task.id)
+                        }
+                        showContextMenu = false
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Default.Edit, contentDescription = "Mark undone")
+                    }
+                )
+            }
             DropdownMenuItem(
                 text = { Text("Delete") },
                 onClick = {
@@ -247,9 +258,6 @@ fun DrawingOverlay(
 ) {
     val points = remember { mutableStateListOf<Offset>() }
     var canvasSize by remember { mutableStateOf(IntSize(0, 0)) }
-
-    // spring animation for strike
-    val progress by animateFloatAsState(targetValue = if (isCompleted) 1f else 0f, animationSpec = spring())
 
     Canvas(modifier = modifier
         .onSizeChanged { canvasSize = it }
@@ -310,15 +318,6 @@ fun DrawingOverlay(
                 for (i in 1 until points.size) lineTo(points[i].x, points[i].y)
             }
             drawPath(path, Color.Black, style = Stroke(width = 6f))
-        }
-
-        // animated clean strike
-        if (isCompleted && canvasSize.height > 0) {
-            val y = canvasSize.height / 2f
-            val startX = 0f
-            val endX = size.width
-            val currentEnd = startX + (endX - startX) * progress
-            drawLine(color = Color.Black, start = Offset(startX, y), end = Offset(currentEnd, y), strokeWidth = 6f)
         }
     }
 }

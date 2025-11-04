@@ -35,6 +35,13 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         repo.updateTask(task.copy(isDone = true))
     }
 
+    fun markUndone(id: Long) = viewModelScope.launch {
+        // fetch the current entity from the state flow, update, and remove strokes
+        val task = tasks.value.firstOrNull { it.id == id } ?: return@launch
+        repo.updateTask(task.copy(isDone = false))
+        repo.deleteStrokesForTask(id)
+    }
+
     fun deleteTask(id: Long) = viewModelScope.launch {
         // remove strokes for the task then delete the task
         repo.deleteStrokesForTask(id)
