@@ -68,6 +68,23 @@ object HapticUtil {
     }
 
     /**
+     * Perform a short fade-out haptic (~200ms) used for eraser deletions.
+     */
+    fun performFadeOut(haptics: HapticFeedback?) {
+        try {
+            CoroutineScope(Dispatchers.Main).launch {
+                // start medium, then two lighter taps to fade out
+                haptics?.performHapticFeedback(HapticFeedbackType.LongPress)
+                delay(80)
+                haptics?.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                delay(120)
+                // end
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    /**
      * Start repeating haptic ticks for loading states
      * Returns a Job that can be cancelled to stop the haptics
      *
@@ -95,4 +112,3 @@ object HapticUtil {
         }
     }
 }
-

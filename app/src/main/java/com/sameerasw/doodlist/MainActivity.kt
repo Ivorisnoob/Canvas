@@ -65,6 +65,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.res.ResourcesCompat
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalHapticFeedback
+import com.sameerasw.doodlist.utils.HapticUtil
+import kotlinx.coroutines.Job
 
 @OptIn(ExperimentalMaterial3Api::class)
 enum class ToolType {
@@ -116,6 +119,9 @@ fun CanvasApp(viewModel: CanvasViewModel) {
     var showPenOptions by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        val haptics = LocalHapticFeedback.current
+        var sliderHapticJob by remember { mutableStateOf<Job?>(null) }
+
         // Canvas area - bottom layer (z-index: 0)
         DrawingCanvas(
             currentTool = currentTool,
@@ -168,12 +174,34 @@ fun CanvasApp(viewModel: CanvasViewModel) {
                             ) {}
                         }
 
-                        // Slider to pick pen width
+                        // Slider to pick pen width - attach pointerInput to detect pointer down/up and start/stop haptics
                         androidx.compose.material3.Slider(
                             value = penWidth,
                             onValueChange = { penWidth = it },
                             valueRange = 1f..48f,
-                            modifier = Modifier.width(240.dp)
+                            modifier = Modifier
+                                .width(240.dp)
+                                .pointerInput(Unit) {
+                                    awaitPointerEventScope {
+                                        var pressed = false
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            val anyPressed = event.changes.any { it.pressed }
+                                            if (anyPressed && !pressed) {
+                                                // press started
+                                                pressed = true
+                                                sliderHapticJob?.cancel()
+                                                sliderHapticJob = HapticUtil.startLoadingHaptics(haptics)
+                                            } else if (!anyPressed && pressed) {
+                                                // press ended
+                                                pressed = false
+                                                sliderHapticJob?.cancel()
+                                                sliderHapticJob = null
+                                                HapticUtil.performClick(haptics)
+                                            }
+                                        }
+                                    }
+                                }
                         )
                     }
                 }
@@ -212,9 +240,12 @@ fun CanvasApp(viewModel: CanvasViewModel) {
                          onClick = {
                              if (currentTool == ToolType.PEN) {
                                  showPenOptions = !showPenOptions
+                                 // two-step click haptic on opening/closing secondary toolbar
+                                 HapticUtil.performClick(haptics)
                              } else {
                                  currentTool = ToolType.PEN
                                  showPenOptions = false
+                                 HapticUtil.performLightTick(haptics)
                              }
                          }
                      ) {
@@ -235,6 +266,8 @@ fun CanvasApp(viewModel: CanvasViewModel) {
                              val new = !expanded
                              expanded = new
                              if (!new) showPenOptions = false
+                             // two-step click haptic for main toolbar expand/collapse
+                             HapticUtil.performClick(haptics)
                          }
                      ) {
                          Icon(
@@ -260,6 +293,7 @@ fun CanvasApp(viewModel: CanvasViewModel) {
                          onClick = {
                              currentTool = ToolType.ERASER
                              showPenOptions = false
+                             HapticUtil.performLightTick(haptics)
                          }
                      ) {
                          Icon(
@@ -277,6 +311,7 @@ fun CanvasApp(viewModel: CanvasViewModel) {
                          onClick = {
                              currentTool = ToolType.TEXT
                              showPenOptions = false
+                             HapticUtil.performLightTick(haptics)
                          }
                      ) {
                          Icon(
@@ -306,6 +341,9 @@ fun DrawingCanvas(
     onUpdateText: ((com.sameerasw.doodlist.data.TextItem) -> Unit)? = null,
     onRemoveText: ((Long) -> Unit)? = null
 ) {
+    val haptics = LocalHapticFeedback.current
+    var drawingHapticJob by remember { mutableStateOf<Job?>(null) }
+
     var scale by remember { mutableStateOf(1f) }
     var offsetX by remember { mutableStateOf(0f) }
     var offsetY by remember { mutableStateOf(0f) }
@@ -363,7 +401,12 @@ fun DrawingCanvas(
                             // store pending position in world coords
                             pendingTextPosition = worldStart
                         }
-                    },
+                        // start subtle repeating haptic while drawing with pen
+                        if (currentTool == ToolType.PEN) {
+                            drawingHapticJob?.cancel()
+                            drawingHapticJob = HapticUtil.startLoadingHaptics(haptics)
+                        }
+                     },
                     onDrag = { change: PointerInputChange, _ ->
                         // If moving text
                         if (isMovingText && selectedTextId != null) {
@@ -396,14 +439,17 @@ fun DrawingCanvas(
                             ToolType.ERASER -> {
                                 // Eraser mode: remove strokes at position (compare in world coords)
                                 val worldThreshold = eraserRadius / scale
+                                var removedAny = false
                                 onRemoveStroke?.invoke { stroke ->
-                                    stroke.points.any { point ->
+                                    val hit = stroke.points.any { point ->
                                         val distance = kotlin.math.hypot(
                                             worldPos.x - point.x,
                                             worldPos.y - point.y
                                         )
                                         distance < worldThreshold
                                     }
+                                    if (hit) removedAny = true
+                                    hit
                                 }
 
                                 // Also remove text items within threshold (treat text like drawable strokes)
@@ -417,7 +463,12 @@ fun DrawingCanvas(
                                         distance < worldThreshold + (text.size * 0.5f)
                                     }.map { it.id }
 
+                                    if (toRemove.isNotEmpty()) removedAny = true
                                     toRemove.forEach { id -> removeText(id) }
+                                }
+
+                                if (removedAny) {
+                                    HapticUtil.performFadeOut(haptics)
                                 }
                             }
                             ToolType.TEXT -> {
@@ -431,12 +482,18 @@ fun DrawingCanvas(
                             val newStroke = DrawStroke(currentStroke.toList(), strokeColor, width = penWidth)
                             onAddStroke?.invoke(newStroke)
                         }
+                        // stop drawing haptics
+                        drawingHapticJob?.cancel()
+                        drawingHapticJob = null
                         currentStroke.clear()
                         // finish moving
                         isMovingText = false
                         selectedTextId = null
                     },
                     onDragCancel = {
+                        // stop drawing haptics
+                        drawingHapticJob?.cancel()
+                        drawingHapticJob = null
                         currentStroke.clear()
                         isMovingText = false
                         selectedTextId = null
