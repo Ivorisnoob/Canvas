@@ -5,7 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -53,7 +52,13 @@ import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -75,8 +80,13 @@ class MainActivity : ComponentActivity() {
                     val vm: TaskViewModel = viewModel()
                     val tasks by vm.tasks.collectAsState()
 
-                    Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-                        Text("Paper Todo", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(8.dp))
+                    Column(modifier = Modifier.fillMaxSize().padding(8.dp).windowInsetsPadding(WindowInsets.systemBars)) {
+                        val handwritingFont = FontFamily(Font(R.font.font))
+                        Text("DoodList", style = MaterialTheme.typography.headlineLarge.copy(
+                            fontFamily = handwritingFont,
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold
+                        ), modifier = Modifier.padding(8.dp).fillMaxWidth(), textAlign = TextAlign.Center)
                         TaskList(tasks = tasks, vm = vm, modifier = Modifier.weight(1f))
 
                         // Add task area at bottom
@@ -125,15 +135,13 @@ fun TaskItem(task: com.sameerasw.doodlist.data.TaskEntity, vm: TaskViewModel) {
         }
     }
 
-    // Load a handwriting font from res/font/scribble.ttf (optional)
-    // To use a real TTF: add a file at app/src/main/res/font/scribble.ttf and replace FontFamily.Default below with
-    // FontFamily(Font(resId = R.font.scribble))
-    val scribble = FontFamily.Default
+    // Custom handwritten font
+    val handwritingFont = FontFamily(Font(R.font.font))
 
     Box {
-        Card(modifier = Modifier
+        Box(modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp)
+            .padding(vertical = 6.dp, horizontal = 16.dp)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onLongPress = {
@@ -143,8 +151,7 @@ fun TaskItem(task: com.sameerasw.doodlist.data.TaskEntity, vm: TaskViewModel) {
             }) {
             Box(modifier = Modifier
                 .height(72.dp)
-                .fillMaxWidth()
-                .background(if (task.isDone) Color(0xFFE8E8E8) else Color(0xFFFFFDF5))) {
+                .fillMaxWidth()) {
 
                 // Task text and drawing overlay
                 Box(modifier = Modifier.fillMaxWidth()) {
@@ -152,14 +159,15 @@ fun TaskItem(task: com.sameerasw.doodlist.data.TaskEntity, vm: TaskViewModel) {
                         text = task.text,
                         modifier = Modifier
                             .align(Alignment.CenterStart)
-                            .padding(start = 20.dp)
+                            .padding(start = 24.dp, end = 24.dp)
                             .onGloballyPositioned { coords ->
                                 textHeightPx = coords.size.height
                             },
                         style = MaterialTheme.typography.bodyLarge.copy(
-                            color = if (task.isDone) Color.Gray else Color.Black,
+                            fontSize = 24.sp,
+                            color = if (task.isDone) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onBackground,
                             textDecoration = if (task.isDone) TextDecoration.LineThrough else TextDecoration.None,
-                            fontFamily = scribble
+                            fontFamily = handwritingFont
                         )
                     )
 
@@ -258,6 +266,7 @@ fun DrawingOverlay(
 ) {
     val points = remember { mutableStateListOf<Offset>() }
     var canvasSize by remember { mutableStateOf(IntSize(0, 0)) }
+    val strokeColor = MaterialTheme.colorScheme.onBackground
 
     Canvas(modifier = modifier
         .onSizeChanged { canvasSize = it }
@@ -300,24 +309,24 @@ fun DrawingOverlay(
             )
         }
     ) {
-        // draw restored strokes
+        // draw restored strokes with pencil-like appearance
         restoredStrokes.forEach { stroke ->
             if (stroke.size >= 2) {
                 val path = Path().apply {
                     moveTo(stroke.first().x, stroke.first().y)
                     stroke.drop(1).forEach { lineTo(it.x, it.y) }
                 }
-                drawPath(path, Color.Black, style = Stroke(width = 6f))
+                drawPath(path, strokeColor, style = Stroke(width = 3f))
             }
         }
 
-        // draw live stroke
+        // draw live stroke with pencil-like appearance
         if (points.isNotEmpty()) {
             val path = Path().apply {
                 moveTo(points.first().x, points.first().y)
                 for (i in 1 until points.size) lineTo(points[i].x, points[i].y)
             }
-            drawPath(path, Color.Black, style = Stroke(width = 6f))
+            drawPath(path, strokeColor, style = Stroke(width = 3f))
         }
     }
 }
@@ -326,15 +335,65 @@ fun DrawingOverlay(
 @Composable
 fun AddTaskBar(vm: TaskViewModel) {
     var text by remember { mutableStateOf("") }
-    Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        TextField(value = text, onValueChange = { text = it }, placeholder = { Text("New task") }, modifier = Modifier.fillMaxWidth(0.8f))
-        FloatingActionButton(onClick = {
-            if (text.isNotBlank()) {
-                vm.addTask(text.trim())
-                text = ""
+    val handwritingFont = FontFamily(Font(R.font.font))
+    val underlineColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // Text input without default styling
+            TextField(
+                value = text,
+                onValueChange = { text = it },
+                placeholder = { Text("New task", style = MaterialTheme.typography.bodyLarge.copy(fontFamily = handwritingFont, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))) },
+                modifier = Modifier.weight(1f),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = handwritingFont, fontSize = 18.sp, color = MaterialTheme.colorScheme.onBackground),
+                singleLine = true,
+                colors = androidx.compose.material3.TextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.background,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                    disabledContainerColor = MaterialTheme.colorScheme.background,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
+                    cursorColor = MaterialTheme.colorScheme.onBackground
+                )
+            )
+
+            // Plus button - just text, no styling
+            Text(
+                "+",
+                fontSize = 32.sp,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontFamily = handwritingFont,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                ),
+                modifier = Modifier
+                    .padding(start = 12.dp)
+                    .clickable(enabled = text.isNotBlank()) {
+                        vm.addTask(text.trim())
+                        text = ""
+                    }
+            )
+        }
+
+        // Manual scribble underline
+        Canvas(modifier = Modifier
+            .fillMaxWidth()
+            .height(8.dp)
+            .padding(top = 4.dp)) {
+            val path = Path().apply {
+                moveTo(0f, size.height * 0.5f)
+                // Create a wavy scribble-like line
+                val steps = 20
+                val waveHeight = size.height * 0.3f
+                for (i in 0..steps) {
+                    val x = (i.toFloat() / steps) * size.width
+                    val y = size.height * 0.5f + waveHeight * kotlin.math.sin((i.toFloat() / steps) * Math.PI.toFloat() * 4f)
+                    if (i == 0) moveTo(x, y) else lineTo(x, y)
+                }
             }
-        }, modifier = Modifier.padding(start = 8.dp)) {
-            Text("Add", fontSize = 14.sp)
+            drawPath(path, underlineColor, style = Stroke(width = 2f))
         }
     }
 }
