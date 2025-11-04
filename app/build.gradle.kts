@@ -57,6 +57,7 @@ dependencies {
     implementation(libs.material3)
     implementation(libs.androidx.foundation)
     implementation(libs.androidx.foundation.layout)
+    implementation(libs.androidx.animation)
     kapt(libs.androidx.room.compiler)
 
     // Gson for serializing strokes
