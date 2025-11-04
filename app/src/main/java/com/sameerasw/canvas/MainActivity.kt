@@ -78,6 +78,27 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.ui.unit.DpOffset
 
+// New imports for saving/sharing and bitmaps
+import android.content.ContentValues
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas as AndroidCanvas
+import android.graphics.Paint
+import android.graphics.Path as AndroidPath
+import android.graphics.Typeface
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
+import android.widget.Toast
+import androidx.core.content.FileProvider
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
 @OptIn(ExperimentalMaterial3Api::class)
 enum class ToolType {
     HAND, PEN, ERASER, TEXT
@@ -141,6 +162,7 @@ fun CanvasApp(viewModel: CanvasViewModel) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         val haptics = LocalHapticFeedback.current
+        val context = LocalContext.current
         // interaction source for top toolbar clickable so we don't create it during composition repeatedly
         val topInteractionSource = remember { MutableInteractionSource() }
 
@@ -227,12 +249,62 @@ fun CanvasApp(viewModel: CanvasViewModel) {
                                             horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            IconButton(onClick = { topMenuOpen = false }) {
+                                            // Updated: Share button now exports bitmap and opens share sheet
+                                            IconButton(onClick = {
+                                                topMenuOpen = false
+                                                // create filename and launch share
+                                                val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                                                val filename = "doodlist_$ts.png"
+                                                // launch coroutine to export and share
+                                                CoroutineScope(Dispatchers.Main).launch {
+                                                    val bmp = createBitmapFromData(context, strokes, texts)
+                                                    if (bmp != null) {
+                                                        val uri = saveBitmapToDownloads(context, bmp, filename, Bitmap.CompressFormat.PNG)
+                                                        if (uri != null) {
+                                                            // share intent
+                                                            val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                                                type = "image/png"
+                                                                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                            }
+                                                            try {
+                                                                context.startActivity(android.content.Intent.createChooser(shareIntent, "Share image"))
+                                                            } catch (e: Exception) {
+                                                                Toast.makeText(context, "No app available to share image", Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        } else {
+                                                            Toast.makeText(context, "Failed to export image", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    } else {
+                                                        Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                }
+                                            }) {
                                                 Icon(painter = painterResource(id = R.drawable.rounded_ios_share_24), contentDescription = "Share")
                                             }
-                                            IconButton(onClick = { topMenuOpen = false }) {
+
+                                            // Updated: Save button now exports bitmap and saves into Downloads
+                                            IconButton(onClick = {
+                                                topMenuOpen = false
+                                                val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                                                val filename = "doodlist_$ts.png"
+                                                CoroutineScope(Dispatchers.Main).launch {
+                                                    val bmp = createBitmapFromData(context, strokes, texts)
+                                                    if (bmp != null) {
+                                                        val uri = saveBitmapToDownloads(context, bmp, filename, Bitmap.CompressFormat.PNG)
+                                                        if (uri != null) {
+                                                            Toast.makeText(context, "Saved to Downloads", Toast.LENGTH_SHORT).show()
+                                                        } else {
+                                                            Toast.makeText(context, "Failed to save image", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    } else {
+                                                        Toast.makeText(context, "Nothing to save", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                }
+                                            }) {
                                                 Icon(painter = painterResource(id = R.drawable.rounded_download_24), contentDescription = "Save")
                                             }
+
                                             IconButton(onClick = { topMenuOpen = false }) {
                                                 Icon(painter = painterResource(id = R.drawable.rounded_cleaning_services_24), contentDescription = "Clear all")
                                             }
@@ -362,7 +434,7 @@ fun CanvasApp(viewModel: CanvasViewModel) {
             }
 
             // Small spacer between secondary toolbar and main toolbar
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(6.dp))
+            Spacer(modifier = Modifier.size(6.dp))
 
             // HorizontalFloatingToolbar at bottom center - top layer overlay
             HorizontalFloatingToolbar(
@@ -903,12 +975,12 @@ fun DrawingCanvas(
 }
 
 // helper function to draw text with the custom font
-private fun DrawScope.drawStringWithFont(context: android.content.Context, text: String, x: Float, y: Float, fontSize: Float, colorInt: Int) {
+private fun DrawScope.drawStringWithFont(context: Context, text: String, x: Float, y: Float, fontSize: Float, colorInt: Int) {
     if (text.isEmpty()) return
     val size = if (fontSize <= 0f) 16f else fontSize
     // DrawScope doesn't provide direct font loading here; we use native drawText via drawIntoCanvas
     drawIntoCanvas { canvas ->
-        val paint = android.graphics.Paint().apply {
+        val paint = Paint().apply {
             color = colorInt
             textSize = size
             isAntiAlias = true
@@ -972,4 +1044,142 @@ private fun DrawScope.drawScribbleStroke(stroke: List<Offset>, color: Color, wid
 
     // Final main stroke uses baseWidth so finished strokes keep selected thickness
     drawPath(mainPath, color, style = Stroke(width = baseWidth))
+}
+
+// Insert helper functions at end of file for bitmap export/save/share
+
+suspend fun saveBitmapToDownloads(context: Context, bitmap: Bitmap, filename: String, format: Bitmap.CompressFormat): Uri? = withContext(Dispatchers.IO) {
+    val mime = if (format == Bitmap.CompressFormat.PNG) "image/png" else "image/jpeg"
+    val resolver = context.contentResolver
+    val values = ContentValues().apply {
+        put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+        put(MediaStore.MediaColumns.MIME_TYPE, mime)
+        // On Android Q+ we will set RELATIVE_PATH and IS_PENDING below depending on collection
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+            // RELATIVE_PATH will be set to Downloads when inserting into the Downloads collection
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+        }
+    }
+
+    // Prefer MediaStore on Q+; on older devices write to app external files dir and return a FileProvider Uri
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        // Use the Downloads collection so RELATIVE_PATH = Environment.DIRECTORY_DOWNLOADS is allowed.
+        val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val uri: Uri? = resolver.insert(collection, values)
+        if (uri == null) return@withContext null
+
+        try {
+            resolver.openOutputStream(uri).use { out ->
+                if (out == null) throw IOException("Unable to open output stream")
+                bitmap.compress(format, if (format == Bitmap.CompressFormat.PNG) 100 else 90, out)
+                out.flush()
+            }
+        } catch (_: Exception) {
+            resolver.delete(uri, null, null)
+            return@withContext null
+        }
+
+        // Clear pending flag
+        values.clear()
+        values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+        resolver.update(uri, values, null, null)
+
+        return@withContext uri
+    } else {
+        // Fallback for older devices: write to app-specific external Downloads folder (externalFilesDir/Downloads)
+        try {
+            val downloadsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+            if (!downloadsDir.exists()) downloadsDir.mkdirs()
+            val file = File(downloadsDir, filename)
+            file.outputStream().use { out ->
+                bitmap.compress(format, if (format == Bitmap.CompressFormat.PNG) 100 else 90, out)
+                out.flush()
+            }
+
+            // Return a content Uri using FileProvider so callers can share the file safely
+            val authority = context.packageName + ".fileprovider"
+            return@withContext FileProvider.getUriForFile(context, authority, file)
+        } catch (_: Exception) {
+            return@withContext null
+        }
+    }
+}
+
+// Helper: save bitmap to a cache file and return a FileProvider Uri (used for sharing without leaving image permanently in Downloads)
+suspend fun saveBitmapToCacheAndGetUri(context: Context, bitmap: Bitmap, filename: String, format: Bitmap.CompressFormat): Uri? = withContext(Dispatchers.IO) {
+    try {
+        val cacheDir = context.cacheDir
+        if (!cacheDir.exists()) cacheDir.mkdirs()
+        val file = File(cacheDir, filename)
+        file.outputStream().use { out ->
+            bitmap.compress(format, if (format == Bitmap.CompressFormat.PNG) 100 else 90, out)
+            out.flush()
+        }
+        val authority = context.packageName + ".fileprovider"
+        return@withContext FileProvider.getUriForFile(context, authority, file)
+    } catch (_: Exception) {
+        return@withContext null
+    }
+}
+
+// Create a bitmap from stroke/text data. This is a best-effort re-render of the stored world coords.
+suspend fun createBitmapFromData(context: Context, strokes: List<DrawStroke>, texts: List<com.sameerasw.canvas.data.TextItem>, outputWidth: Int = 2048, outputHeight: Int = 2048): Bitmap? = withContext(Dispatchers.Default) {
+    // If there's nothing to draw, return null
+    if (strokes.isEmpty() && texts.isEmpty()) return@withContext null
+
+    val bmp = Bitmap.createBitmap(outputWidth, outputHeight, Bitmap.Config.ARGB_8888)
+    val canvas = AndroidCanvas(bmp)
+    // white background
+    canvas.drawColor(android.graphics.Color.WHITE)
+
+    // draw strokes
+    val paint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+
+    strokes.forEach { s ->
+        if (s.points.size < 2) return@forEach
+        paint.color = s.color.toArgb()
+        paint.strokeWidth = s.width
+
+        val path = AndroidPath()
+        val pts = s.points
+        path.moveTo(pts.first().x, pts.first().y)
+        for (i in 1 until pts.size) {
+            val prev = pts[i - 1]
+            val curr = pts[i]
+            val midX = (prev.x + curr.x) / 2f
+            val midY = (prev.y + curr.y) / 2f
+            path.quadTo(prev.x, prev.y, midX, midY)
+        }
+        path.lineTo(pts.last().x, pts.last().y)
+
+        canvas.drawPath(path, paint)
+    }
+
+    // draw texts
+    val textPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.FILL
+        color = android.graphics.Color.BLACK
+    }
+
+    texts.forEach { t ->
+        textPaint.textSize = t.size
+        try {
+            val tf: Typeface? = ResourcesCompat.getFont(context, R.font.font)
+            if (tf != null) textPaint.typeface = tf
+        } catch (_: Exception) { }
+
+        // baseline adjustment
+        val fm = textPaint.fontMetrics
+        val baseline = t.y - fm.ascent
+        canvas.drawText(t.text, t.x, baseline, textPaint)
+    }
+
+    return@withContext bmp
 }
