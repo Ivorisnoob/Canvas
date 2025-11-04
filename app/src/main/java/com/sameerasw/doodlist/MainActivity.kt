@@ -293,9 +293,13 @@ fun DrawingCanvas(
             // removed graphicsLayer to avoid double-transform issues
             .pointerInput(currentTool) {
                 detectTransformGestures { centroid, pan, zoom, _ ->
+                    // Make pinch easier: amplify the gesture zoom slightly so small finger movement scales more
+                    val zoomSensitivity = 1.6f // >1 => easier to zoom
+                    val effectiveZoom = 1f + (zoom - 1f) * zoomSensitivity
+
                     // Adjust scale around the gesture centroid so zoom feels natural
                     val prevScale = scale
-                    val newScale = (scale * zoom).coerceIn(0.5f, 3f)
+                    val newScale = (scale * effectiveZoom).coerceIn(0.25f, 6f)
 
                     // Compute centroid in world coords before scaling
                     val worldCx = (centroid.x - offsetX) / prevScale
@@ -305,7 +309,6 @@ fun DrawingCanvas(
                     scale = newScale
 
                     // Recompute offset so the centroid screen position remains under the fingers
-                    // Do NOT add pan.x/pan.y here: centroid already reflects finger movement.
                     offsetX = centroid.x - worldCx * scale
                     offsetY = centroid.y - worldCy * scale
                 }
@@ -431,9 +434,20 @@ fun DrawingCanvas(
                         }
                     },
                     onTap = { offset ->
+                        val world = Offset((offset.x - offsetX) / scale, (offset.y - offsetY) / scale)
+
+                        // If PEN tool: add a tiny dot stroke at tapped location
+                        if (currentTool == ToolType.PEN) {
+                            // create a very small two-point stroke so drawScribbleStroke can render it
+                            val delta = 0.5f // world units (approx pixels at scale 1)
+                            val p1 = world
+                            val p2 = Offset(world.x + delta, world.y + delta)
+                            onAddStroke?.invoke(DrawStroke(listOf(p1, p2), strokeColor, width = penWidth))
+                            return@detectTapGestures
+                        }
+
                         // Tapping an existing text in TEXT mode starts move
                         if (currentTool == ToolType.TEXT) {
-                            val world = Offset((offset.x - offsetX) / scale, (offset.y - offsetY) / scale)
                             val hit = texts.find { text ->
                                 val half = text.size
                                 world.x >= text.x - half && world.x <= text.x + half &&
@@ -588,9 +602,9 @@ private fun DrawScope.drawStringWithFont(context: android.content.Context, text:
             isAntiAlias = true
             // load font from resources
             try {
-                val tf = ResourcesCompat.getFont(context, com.sameerasw.doodlist.R.font.font)
+                val tf = ResourcesCompat.getFont(context, R.font.font)
                 if (tf != null) typeface = tf
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // ignore and use default
             }
         }
@@ -604,7 +618,6 @@ private fun DrawScope.drawStringWithFont(context: android.content.Context, text:
 private fun DrawScope.drawScribbleStroke(stroke: List<Offset>, color: Color, width: Float) {
     if (stroke.size < 2) return
 
-    val random = Random(42)
     val baseWidth = width.coerceAtLeast(1.0f)
 
     // fewer, gentler scribble layers to reduce jaggedness
@@ -623,7 +636,7 @@ private fun DrawScope.drawScribbleStroke(stroke: List<Offset>, color: Color, wid
             val curr = stroke[i]
             val midX = (prev.x + curr.x) / 2f + layerOffset
             val midY = (prev.y + curr.y) / 2f + layerOffset
-            path.quadraticBezierTo(prev.x + layerOffset, prev.y + layerOffset, midX, midY)
+            path.quadraticTo(prev.x + layerOffset, prev.y + layerOffset, midX, midY)
         }
         // ensure last point
         path.lineTo(stroke.last().x + layerOffset, stroke.last().y + layerOffset)
@@ -641,7 +654,7 @@ private fun DrawScope.drawScribbleStroke(stroke: List<Offset>, color: Color, wid
         val curr = stroke[i]
         val midX = (prev.x + curr.x) / 2f
         val midY = (prev.y + curr.y) / 2f
-        mainPath.quadraticBezierTo(prev.x, prev.y, midX, midY)
+        mainPath.quadraticTo(prev.x, prev.y, midX, midY)
     }
     mainPath.lineTo(stroke.last().x, stroke.last().y)
 
