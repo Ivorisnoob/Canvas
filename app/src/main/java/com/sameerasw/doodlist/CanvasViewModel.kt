@@ -6,9 +6,15 @@ import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.sameerasw.doodlist.data.CanvasRepository
+import com.sameerasw.doodlist.data.TextItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+
+data class CanvasModel(
+    val strokes: List<DrawStroke> = emptyList(),
+    val texts: List<TextItem> = emptyList()
+)
 
 class CanvasViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = CanvasRepository(application)
@@ -16,6 +22,9 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _strokes = MutableStateFlow<List<DrawStroke>>(emptyList())
     val strokes = _strokes.asStateFlow()
+
+    private val _texts = MutableStateFlow<List<TextItem>>(emptyList())
+    val texts = _texts.asStateFlow()
 
     init {
         load()
@@ -37,9 +46,23 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
         _strokes.value = emptyList()
     }
 
+    // Text operations
+    fun addText(textItem: TextItem) {
+        _texts.value = _texts.value + textItem
+    }
+
+    fun updateText(updated: TextItem) {
+        _texts.value = _texts.value.map { if (it.id == updated.id) updated else it }
+    }
+
+    fun removeText(id: Long) {
+        _texts.value = _texts.value.filterNot { it.id == id }
+    }
+
     fun save() {
         viewModelScope.launch {
-            val json = gson.toJson(_strokes.value)
+            val model = CanvasModel(_strokes.value, _texts.value)
+            val json = gson.toJson(model)
             repository.saveCanvas(json)
         }
     }
@@ -49,14 +72,21 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
             val json = repository.loadCanvas()
             if (json != null) {
                 try {
-                    val type = object : TypeToken<List<DrawStroke>>() {}.type
-                    val list: List<DrawStroke> = gson.fromJson(json, type)
-                    _strokes.value = list
+                    val type = object : TypeToken<CanvasModel>() {}.type
+                    val model: CanvasModel = gson.fromJson(json, type)
+                    _strokes.value = model.strokes
+                    _texts.value = model.texts
                 } catch (e: Exception) {
-                    // ignore parse errors
+                    // handle old format: maybe only strokes were saved
+                    try {
+                        val type = object : TypeToken<List<DrawStroke>>() {}.type
+                        val list: List<DrawStroke> = gson.fromJson(json, type)
+                        _strokes.value = list
+                    } catch (e2: Exception) {
+                        // ignore
+                    }
                 }
             }
         }
     }
 }
-

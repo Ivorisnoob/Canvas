@@ -22,4 +22,3 @@ class CanvasRepository(context: Context) {
         dao.clear()
     }
 }
-

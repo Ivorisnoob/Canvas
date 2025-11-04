@@ -44,10 +44,21 @@ import androidx.compose.ui.res.painterResource
 import com.sameerasw.doodlist.ui.theme.DoodListTheme
 import kotlin.math.abs
 import kotlin.random.Random
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.res.ResourcesCompat
+import androidx.compose.ui.graphics.toArgb
 
 @OptIn(ExperimentalMaterial3Api::class)
 enum class ToolType {
-    HAND, PEN, ERASER
+    HAND, PEN, ERASER, TEXT
 }
 
 data class DrawStroke(
@@ -87,6 +98,7 @@ class MainActivity : ComponentActivity() {
 fun CanvasApp(viewModel: CanvasViewModel) {
     var currentTool by remember { mutableStateOf(ToolType.PEN) }
     val strokes by viewModel.strokes.collectAsState()
+    val texts by viewModel.texts.collectAsState()
     var expanded by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -94,8 +106,12 @@ fun CanvasApp(viewModel: CanvasViewModel) {
         DrawingCanvas(
             currentTool = currentTool,
             strokes = strokes.toMutableList(),
+            texts = texts,
             onAddStroke = { viewModel.addStroke(it) },
             onRemoveStroke = { predicate -> viewModel.removeStroke(predicate) },
+            onAddText = { viewModel.addText(it) },
+            onUpdateText = { viewModel.updateText(it) },
+            onRemoveText = { viewModel.removeText(it) },
             modifier = Modifier.fillMaxSize()
         )
 
@@ -123,6 +139,7 @@ fun CanvasApp(viewModel: CanvasViewModel) {
                                     ToolType.HAND -> R.drawable.rounded_back_hand_24
                                     ToolType.PEN -> R.drawable.rounded_stylus_fountain_pen_24
                                     ToolType.ERASER -> R.drawable.rounded_ink_eraser_24
+                                    ToolType.TEXT -> R.drawable.rounded_text_fields_24
                                 }
                             }
                         ),
@@ -186,6 +203,24 @@ fun CanvasApp(viewModel: CanvasViewModel) {
                         modifier = Modifier.width(if (expanded) 28.dp else 24.dp)
                     )
                 }
+
+                // Text tool
+                IconButton(
+                    modifier = Modifier.width(if (expanded) 64.dp else 48.dp),
+                    onClick = {
+                        currentTool = ToolType.TEXT
+                    }
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.rounded_text_fields_24),
+                        contentDescription = "Text tool",
+                        tint = if (currentTool == ToolType.TEXT)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.width(if (expanded) 28.dp else 24.dp)
+                    )
+                }
             }
         )
     }
@@ -195,9 +230,13 @@ fun CanvasApp(viewModel: CanvasViewModel) {
 fun DrawingCanvas(
     currentTool: ToolType,
     strokes: MutableList<DrawStroke>,
+    texts: List<com.sameerasw.doodlist.data.TextItem> = emptyList(),
     modifier: Modifier = Modifier,
     onAddStroke: ((DrawStroke) -> Unit)? = null,
-    onRemoveStroke: ((predicate: (DrawStroke) -> Boolean) -> Unit)? = null
+    onRemoveStroke: ((predicate: (DrawStroke) -> Boolean) -> Unit)? = null,
+    onAddText: ((com.sameerasw.doodlist.data.TextItem) -> Unit)? = null,
+    onUpdateText: ((com.sameerasw.doodlist.data.TextItem) -> Unit)? = null,
+    onRemoveText: ((Long) -> Unit)? = null
 ) {
     var scale by remember { mutableStateOf(1f) }
     var offsetX by remember { mutableStateOf(0f) }
@@ -206,30 +245,72 @@ fun DrawingCanvas(
     val strokeColor = MaterialTheme.colorScheme.onBackground
     val eraserRadius = 30f
 
+    val context = LocalContext.current
+    val themeColor = MaterialTheme.colorScheme.onBackground.toArgb()
+
+    // Text dialog state
+    var showTextDialog by remember { mutableStateOf(false) }
+    var showTextOptions by remember { mutableStateOf(false) }
+    var pendingTextPosition by remember { mutableStateOf(Offset.Zero) }
+    var pendingTextValue by remember { mutableStateOf("") }
+
+    // Selected text for context menu / moving
+    var selectedTextId by remember { mutableStateOf<Long?>(null) }
+    var isMovingText by remember { mutableStateOf(false) }
+
     Canvas(
         modifier = modifier
-            .graphicsLayer(
-                scaleX = scale,
-                scaleY = scale,
-                translationX = offsetX,
-                translationY = offsetY
-            )
+            // removed graphicsLayer to avoid double-transform issues
             .pointerInput(currentTool) {
-                detectTransformGestures { _, pan, zoom, _ ->
-                    // Always allow two-finger zoom and pan
-                    scale = (scale * zoom).coerceIn(0.5f, 3f)
-                    offsetX += pan.x
-                    offsetY += pan.y
+                detectTransformGestures { centroid, pan, zoom, _ ->
+                    // Adjust scale around the gesture centroid so zoom feels natural
+                    val prevScale = scale
+                    val newScale = (scale * zoom).coerceIn(0.5f, 3f)
+
+                    // Compute centroid in world coords before scaling
+                    val worldCx = (centroid.x - offsetX) / prevScale
+                    val worldCy = (centroid.y - offsetY) / prevScale
+
+                    // Apply new scale
+                    scale = newScale
+
+                    // Recompute offset so the centroid screen position remains under the fingers
+                    // Do NOT add pan.x/pan.y here: centroid already reflects finger movement.
+                    offsetX = centroid.x - worldCx * scale
+                    offsetY = centroid.y - worldCy * scale
                 }
             }
             .pointerInput(currentTool) {
                 detectDragGestures(
                     onDragStart = { offset ->
                         currentStroke.clear()
-                        currentStroke.add(offset)
+                        // convert to world coords
+                        val worldStart = Offset((offset.x - offsetX) / scale, (offset.y - offsetY) / scale)
+                        currentStroke.add(worldStart)
+
+                        if (currentTool == ToolType.TEXT) {
+                            // store pending position in world coords
+                            pendingTextPosition = worldStart
+                        }
                     },
                     onDrag = { change: PointerInputChange, _ ->
-                        currentStroke.add(change.position)
+                        // If moving text
+                        if (isMovingText && selectedTextId != null) {
+                            val worldPos = Offset((change.position.x - offsetX) / scale, (change.position.y - offsetY) / scale)
+                            onUpdateText?.invoke(
+                                com.sameerasw.doodlist.data.TextItem(
+                                    id = selectedTextId!!,
+                                    x = worldPos.x,
+                                    y = worldPos.y,
+                                    text = texts.first { it.id == selectedTextId!! }.text
+                                )
+                            )
+                            change.consume()
+                            return@detectDragGestures
+                        }
+
+                        val worldPos = Offset((change.position.x - offsetX) / scale, (change.position.y - offsetY) / scale)
+                        currentStroke.add(worldPos)
                         change.consume()
 
                         when (currentTool) {
@@ -242,16 +323,20 @@ fun DrawingCanvas(
                                 // Pen mode: draw continuously (visual feedback in canvas)
                             }
                             ToolType.ERASER -> {
-                                // Eraser mode: remove strokes at position
+                                // Eraser mode: remove strokes at position (compare in world coords)
+                                val worldThreshold = eraserRadius / scale
                                 onRemoveStroke?.invoke { stroke ->
                                     stroke.points.any { point ->
                                         val distance = kotlin.math.hypot(
-                                            change.position.x - point.x,
-                                            change.position.y - point.y
+                                            worldPos.x - point.x,
+                                            worldPos.y - point.y
                                         )
-                                        distance < eraserRadius
+                                        distance < worldThreshold
                                     }
                                 }
+                            }
+                            ToolType.TEXT -> {
+                                // Text mode: dragging shouldn't draw; we use long-press to add
                             }
                         }
                     },
@@ -261,31 +346,213 @@ fun DrawingCanvas(
                             onAddStroke?.invoke(newStroke)
                         }
                         currentStroke.clear()
+                        // finish moving
+                        isMovingText = false
+                        selectedTextId = null
                     },
                     onDragCancel = {
                         currentStroke.clear()
+                        isMovingText = false
+                        selectedTextId = null
+                    }
+                )
+            }
+            .pointerInput(currentTool) {
+                // detectTapGestures to support longPress to add text and tapping existing text for options
+                detectTapGestures(
+                    onLongPress = { offset ->
+                        if (currentTool == ToolType.TEXT) {
+                            // convert to world coords for hit-test
+                            val world = Offset((offset.x - offsetX) / scale, (offset.y - offsetY) / scale)
+
+                            val hit = texts.find { text ->
+                                val half = text.size
+                                world.x >= text.x - half && world.x <= text.x + half &&
+                                        world.y >= text.y - half && world.y <= text.y + half
+                            }
+
+                            if (hit != null) {
+                                // long press on existing text -> show options (edit/move/delete)
+                                selectedTextId = hit.id
+                                pendingTextValue = hit.text
+                                pendingTextPosition = Offset(hit.x, hit.y)
+                                showTextOptions = true
+                            } else {
+                                // add new text at pointer location (store world coords)
+                                pendingTextPosition = world
+                                pendingTextValue = ""
+                                showTextDialog = true
+                            }
+                        }
+                    },
+                    onTap = { offset ->
+                        // Tapping an existing text in TEXT mode starts move
+                        if (currentTool == ToolType.TEXT) {
+                            val world = Offset((offset.x - offsetX) / scale, (offset.y - offsetY) / scale)
+                            val hit = texts.find { text ->
+                                val half = text.size
+                                world.x >= text.x - half && world.x <= text.x + half &&
+                                        world.y >= text.y - half && world.y <= text.y + half
+                            }
+                            if (hit != null) {
+                                selectedTextId = hit.id
+                                isMovingText = true
+                            }
+                        }
                     }
                 )
             }
     ) {
-        // Draw all strokes
+        // Draw by mapping world coordinates (strokes/texts) -> screen coordinates explicitly.
+        // This avoids transform mismatch between pointer input and drawing.
+        // Draw all strokes (stored in world coords) transformed to screen coords
         strokes.forEach { stroke ->
-            drawScribbleStroke(stroke.points, stroke.color)
+            val screenPoints = stroke.points.map { world -> Offset(world.x * scale + offsetX, world.y * scale + offsetY) }
+            if (screenPoints.size >= 2) drawScribbleStroke(screenPoints, stroke.color)
         }
 
-        // Draw current stroke being drawn
+        // Draw texts at their world positions (map to screen and scale font size)
+        texts.forEach { t ->
+            val sx = t.x * scale + offsetX
+            val sy = t.y * scale + offsetY
+            val fontSize = t.size * scale
+            drawStringWithFont(context, t.text, sx, sy, fontSize, themeColor)
+        }
+
+        // Draw current stroke being drawn (world coords -> screen coords)
         if (currentTool == ToolType.PEN && currentStroke.size >= 2) {
-            drawScribbleStroke(currentStroke.toList(), strokeColor)
+            val screenPoints = currentStroke.map { world -> Offset(world.x * scale + offsetX, world.y * scale + offsetY) }
+            drawScribbleStroke(screenPoints, strokeColor)
         }
 
-        // Draw eraser preview circle
+        // Draw eraser preview circle in screen coords
         if (currentTool == ToolType.ERASER && currentStroke.isNotEmpty()) {
+            val last = currentStroke.last()
+            val center = Offset(last.x * scale + offsetX, last.y * scale + offsetY)
             drawCircle(
                 color = strokeColor.copy(alpha = 0.3f),
                 radius = eraserRadius,
-                center = currentStroke.last()
+                center = center
             )
         }
+    }
+
+    // Show Text options dialog (edit/move/delete) for existing text
+    if (showTextOptions && selectedTextId != null) {
+        AlertDialog(
+            onDismissRequest = { showTextOptions = false; selectedTextId = null },
+            title = { Text("Text options") },
+            text = { Text("Choose an action for the selected text") },
+            confirmButton = {
+                TextButton(onClick = {
+                    // Edit
+                    val hit = texts.firstOrNull { it.id == selectedTextId }
+                    if (hit != null) {
+                        pendingTextValue = hit.text
+                        pendingTextPosition = Offset(hit.x, hit.y)
+                        showTextDialog = true
+                    }
+                    showTextOptions = false
+                }) { Text("Edit") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        // Move
+                        isMovingText = true
+                        showTextOptions = false
+                    }) { Text("Move") }
+
+                    TextButton(onClick = {
+                        // Delete
+                        onRemoveText?.invoke(selectedTextId!!)
+                        selectedTextId = null
+                        showTextOptions = false
+                    }) { Text("Delete") }
+
+                    TextButton(onClick = {
+                        selectedTextId = null
+                        showTextOptions = false
+                    }) { Text("Cancel") }
+                }
+            }
+        )
+    }
+
+    // Show Text add/edit dialog
+    if (showTextDialog) {
+        AlertDialog(
+            onDismissRequest = { showTextDialog = false; selectedTextId = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (selectedTextId != null) {
+                        // editing existing
+                        onUpdateText?.invoke(
+                            com.sameerasw.doodlist.data.TextItem(
+                                id = selectedTextId!!,
+                                x = pendingTextPosition.x,
+                                y = pendingTextPosition.y,
+                                text = pendingTextValue
+                            )
+                        )
+                    } else {
+                        // adding new
+                        onAddText?.invoke(
+                            com.sameerasw.doodlist.data.TextItem(
+                                x = pendingTextPosition.x,
+                                y = pendingTextPosition.y,
+                                text = pendingTextValue
+                            )
+                        )
+                    }
+                    showTextDialog = false
+                    selectedTextId = null
+                }) {
+                    Text(if (selectedTextId != null) "Save" else "Add")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showTextDialog = false
+                    selectedTextId = null
+                }) {
+                    Text("Cancel")
+                }
+            },
+            title = { Text(if (selectedTextId != null) "Edit Text" else "Add Text") },
+            text = {
+                OutlinedTextField(
+                    value = pendingTextValue,
+                    onValueChange = { pendingTextValue = it },
+                    label = { Text("Text") }
+                )
+            }
+        )
+    }
+}
+
+// helper function to draw text with the custom font
+private fun DrawScope.drawStringWithFont(context: android.content.Context, text: String, x: Float, y: Float, fontSize: Float, colorInt: Int) {
+    if (text.isEmpty()) return
+    val size = if (fontSize <= 0f) 16f else fontSize
+    // DrawScope doesn't provide direct font loading here; we use native drawText via drawIntoCanvas
+    drawIntoCanvas { canvas ->
+        val paint = android.graphics.Paint().apply {
+            color = colorInt
+            textSize = size
+            isAntiAlias = true
+            // load font from resources
+            try {
+                val tf = ResourcesCompat.getFont(context, com.sameerasw.doodlist.R.font.font)
+                if (tf != null) typeface = tf
+            } catch (e: Exception) {
+                // ignore and use default
+            }
+        }
+        // adjust baseline so x,y is top-left of text
+        val fm = paint.fontMetrics
+        val baseline = y - fm.ascent
+        canvas.nativeCanvas.drawText(text, x, baseline, paint)
     }
 }
 
