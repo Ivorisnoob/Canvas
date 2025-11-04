@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,10 +18,23 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.sp
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -65,6 +79,9 @@ class MainActivity : ComponentActivity() {
                     Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
                         Text("Paper Todo", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(8.dp))
                         TaskList(tasks = tasks, vm = vm)
+
+                        // Simple add task area
+                        AddTaskBar(vm = vm)
                     }
                 }
             }
@@ -94,6 +111,7 @@ fun TaskList(tasks: List<com.sameerasw.doodlist.data.TaskEntity>, vm: TaskViewMo
 @Composable
 fun TaskItem(task: com.sameerasw.doodlist.data.TaskEntity, vm: TaskViewModel) {
     var textHeightPx by remember { mutableStateOf(0) }
+    var showEdit by remember { mutableStateOf(false) }
     // mutableStateListOf is not a State<T> and doesn't support property delegation with 'by'
     val restoredStrokes = remember { mutableStateListOf<List<Offset>>() }
     val scope = rememberCoroutineScope()
@@ -119,35 +137,83 @@ fun TaskItem(task: com.sameerasw.doodlist.data.TaskEntity, vm: TaskViewModel) {
             .fillMaxWidth()
             .background(Color(0xFFFFFDF5))) {
 
-            Text(
-                text = task.text,
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = 20.dp)
-                    .onGloballyPositioned { coords ->
-                        textHeightPx = coords.size.height
-                    },
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    color = if (task.isDone) Color.Gray else Color.Black,
-                    textDecoration = if (task.isDone) TextDecoration.LineThrough else TextDecoration.None,
-                    fontFamily = scribble
-                )
-            )
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                // Task text and drawing overlay sits above
+                Box(modifier = Modifier.fillMaxWidth(0.75f)) {
+                    Text(
+                        text = task.text,
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = 20.dp)
+                            .onGloballyPositioned { coords ->
+                                textHeightPx = coords.size.height
+                            },
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            color = if (task.isDone) Color.Gray else Color.Black,
+                            textDecoration = if (task.isDone) TextDecoration.LineThrough else TextDecoration.None,
+                            fontFamily = scribble
+                        )
+                    )
 
-            DrawingOverlay(
-                modifier = Modifier.matchParentSize(),
-                isCompleted = task.isDone,
-                textHeight = textHeightPx.toFloat(),
-                restoredStrokes = restoredStrokes,
-                onStrokeComplete = { points ->
-                    // persist stroke and mark done
-                    scope.launch {
-                        val data = serializePath(points)
-                        vm.saveStroke(task.id, data)
-                        vm.markDone(task.id)
+                    DrawingOverlay(
+                        modifier = Modifier.matchParentSize(),
+                        isCompleted = task.isDone,
+                        textHeight = textHeightPx.toFloat(),
+                        restoredStrokes = restoredStrokes,
+                        onStrokeComplete = { points ->
+                            // persist stroke and mark done
+                            scope.launch {
+                                val data = serializePath(points)
+                                vm.saveStroke(task.id, data)
+                                vm.markDone(task.id)
+                            }
+                        }
+                    )
+                }
+
+                // Edit/Delete icons
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Edit",
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clickable { showEdit = true }
+                        .padding(8.dp)
+                )
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete",
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clickable {
+                            vm.deleteTask(task.id)
+                        }
+                        .padding(8.dp)
+                )
+            }
+        }
+    }
+
+    if (showEdit) {
+        Dialog(onDismissRequest = { showEdit = false }) {
+            Card(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Edit task")
+                    var editText by remember { mutableStateOf(task.text) }
+                    TextField(value = editText, onValueChange = { editText = it })
+                    Row(modifier = Modifier.padding(top = 8.dp)) {
+                        Button(onClick = {
+                            vm.updateTask(task.copy(text = editText))
+                            showEdit = false
+                        }, colors = ButtonDefaults.buttonColors()) {
+                            Text("Save")
+                        }
+                        Button(onClick = { showEdit = false }, modifier = Modifier.padding(start = 8.dp)) {
+                            Text("Cancel")
+                        }
                     }
                 }
-            )
+            }
         }
     }
 }
@@ -234,6 +300,23 @@ fun DrawingOverlay(
             val endX = size.width
             val currentEnd = startX + (endX - startX) * progress
             drawLine(color = Color.Black, start = Offset(startX, y), end = Offset(currentEnd, y), strokeWidth = 6f)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AddTaskBar(vm: TaskViewModel) {
+    var text by remember { mutableStateOf("") }
+    Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        TextField(value = text, onValueChange = { text = it }, placeholder = { Text("New task") }, modifier = Modifier.fillMaxWidth(0.8f))
+        FloatingActionButton(onClick = {
+            if (text.isNotBlank()) {
+                vm.addTask(text.trim())
+                text = ""
+            }
+        }, modifier = Modifier.padding(start = 8.dp)) {
+            Text("Add", fontSize = 14.sp)
         }
     }
 }

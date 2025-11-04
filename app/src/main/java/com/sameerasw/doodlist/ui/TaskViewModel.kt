@@ -25,10 +25,20 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         repo.insertTask(TaskEntity(text = text))
     }
 
+    fun updateTask(task: TaskEntity) = viewModelScope.launch {
+        repo.updateTask(task)
+    }
+
     fun markDone(id: Long) = viewModelScope.launch {
         // fetch the current entity from the state flow and update
         val task = tasks.value.firstOrNull { it.id == id } ?: return@launch
         repo.updateTask(task.copy(isDone = true))
+    }
+
+    fun deleteTask(id: Long) = viewModelScope.launch {
+        // remove strokes for the task then delete the task
+        repo.deleteStrokesForTask(id)
+        repo.deleteTask(id)
     }
 
     fun saveStroke(taskId: Long, pathData: String) = viewModelScope.launch {
