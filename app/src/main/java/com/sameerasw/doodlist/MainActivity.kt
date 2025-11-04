@@ -278,7 +278,7 @@ fun CanvasApp(viewModel: CanvasViewModel) {
                      ) {
                          Icon(
                              painter = painterResource(
-                                 id = if (expanded) R.drawable.rounded_gesture_24 else when (currentTool) {
+                                 id = if (expanded) R.drawable.icon else when (currentTool) {
                                      ToolType.HAND -> R.drawable.rounded_back_hand_24
                                      ToolType.PEN -> R.drawable.rounded_stylus_fountain_pen_24
                                      ToolType.ERASER -> R.drawable.rounded_ink_eraser_24
@@ -412,28 +412,6 @@ fun DrawingCanvas(
                             // store pending position in world coords
                             pendingTextPosition = worldStart
                         }
-                        // start adaptive repeating haptic while drawing with pen
-                        if (currentTool == ToolType.PEN) {
-                            drawingHapticJob?.cancel()
-                            // launch coroutine that adjusts tick rate based on currentSpeed
-                            drawingHapticJob = CoroutineScope(Dispatchers.Main).launch {
-                                val minInterval = 10L    // fastest tick (ms)
-                                val maxInterval = 450L   // slowest tick (ms)
-                                val speedForMax = 300f  // px/s at which interval is minInterval
-                                val stationaryThreshold = 60f // px/s below which we suppress ticks
-                                while (isActive) {
-                                    val sp = currentSpeed
-                                    if (sp < stationaryThreshold) {
-                                        // don't tick when barely moving; poll occasionally
-                                        kotlinx.coroutines.delay(200L)
-                                        continue
-                                    }
-                                    val t = ((maxInterval - minInterval) * (1f - (sp.coerceAtMost(speedForMax) / speedForMax))).toLong() + minInterval
-                                    HapticUtil.performLightTick(haptics)
-                                    kotlinx.coroutines.delay(max(20L, t))
-                                }
-                            }
-                        }
                      },
                     onDrag = { change: PointerInputChange, _ ->
                         // If moving text
@@ -457,9 +435,14 @@ fun DrawingCanvas(
                         val now = System.currentTimeMillis()
                         val pos = change.position
                         if (lastMoveTime == 0L) {
+                            // Estimate speed from the movement since the previous pointer position on this event.
+                            val prevPos = change.previousPosition
+                            val dist = kotlin.math.hypot(pos.x - prevPos.x, pos.y - prevPos.y)
+                            val assumedDt = 16L // assume ~16ms between pointer updates (60Hz) for initial estimate
+                            val instSpeed = (dist / assumedDt) * 1000f
+                            currentSpeed = instSpeed
                             lastMoveTime = now
                             lastMovePos = pos
-                            currentSpeed = 0f
                         } else {
                             val dt = (now - lastMoveTime).coerceAtLeast(1L)
                             val dist = kotlin.math.hypot(pos.x - lastMovePos.x, pos.y - lastMovePos.y)
@@ -468,6 +451,27 @@ fun DrawingCanvas(
                             currentSpeed = currentSpeed * 0.6f + instSpeed * 0.4f
                             lastMoveTime = now
                             lastMovePos = pos
+                        }
+                        // If drawing with pen and we don't yet have a haptic job, start one immediately
+                        if (currentTool == ToolType.PEN && drawingHapticJob == null) {
+                            drawingHapticJob = CoroutineScope(Dispatchers.Main).launch {
+                                val minInterval = 10L    // fastest tick (ms)
+                                val maxInterval = 450L   // slowest tick (ms)
+                                val speedForMax = 300f  // px/s at which interval is minInterval
+                                val stationaryThreshold = 60f // px/s below which we suppress ticks
+                                while (isActive) {
+                                    val sp = currentSpeed
+                                    if (sp < stationaryThreshold) {
+                                        // when nearly stationary, wait a bit before re-checking
+                                        kotlinx.coroutines.delay(180L)
+                                        continue
+                                    }
+                                    val t = ((maxInterval - minInterval) * (1f - (sp.coerceAtMost(speedForMax) / speedForMax))).toLong() + minInterval
+                                    // immediate tick based on current speed
+                                    HapticUtil.performLightTick(haptics)
+                                    kotlinx.coroutines.delay(max(20L, t))
+                                }
+                            }
                         }
                          change.consume()
 
