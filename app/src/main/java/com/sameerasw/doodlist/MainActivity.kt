@@ -4,14 +4,53 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Card
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sameerasw.doodlist.ui.TaskViewModel
 import com.sameerasw.doodlist.ui.theme.DoodListTheme
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.hypot
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -19,29 +58,182 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             DoodListTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    val vm: TaskViewModel = viewModel()
+                    val tasks by vm.tasks.collectAsState()
+
+                    Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+                        Text("Paper Todo", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(8.dp))
+                        TaskList(tasks = tasks, vm = vm)
+                    }
                 }
             }
         }
     }
 }
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
+// Helper to serialize/deserialize strokes
+fun serializePath(points: List<Offset>): String = points.joinToString(separator = ";") { "${it.x},${it.y}" }
+fun deserializePath(data: String): List<Offset> = data.split(";").mapNotNull {
+    val parts = it.split(",")
+    if (parts.size != 2) return@mapNotNull null
+    val x = parts[0].toFloatOrNull() ?: return@mapNotNull null
+    val y = parts[1].toFloatOrNull() ?: return@mapNotNull null
+    Offset(x, y)
 }
 
-@Preview(showBackground = true)
 @Composable
-fun GreetingPreview() {
-    DoodListTheme {
-        Greeting("Android")
+fun TaskList(tasks: List<com.sameerasw.doodlist.data.TaskEntity>, vm: TaskViewModel) {
+    LazyColumn {
+        items(tasks, key = { it.id }) { task ->
+            TaskItem(task = task, vm = vm)
+        }
+    }
+}
+
+@Composable
+fun TaskItem(task: com.sameerasw.doodlist.data.TaskEntity, vm: TaskViewModel) {
+    var textHeightPx by remember { mutableStateOf(0) }
+    // mutableStateListOf is not a State<T> and doesn't support property delegation with 'by'
+    val restoredStrokes = remember { mutableStateListOf<List<Offset>>() }
+    val scope = rememberCoroutineScope()
+
+    // load strokes for this task
+    LaunchedEffect(task.id) {
+        vm.getStrokesFlow(task.id).collect { list ->
+            restoredStrokes.clear()
+            list.forEach { restoredStrokes.add(deserializePath(it.pathData)) }
+        }
+    }
+
+    // Load a handwriting font from res/font/scribble.ttf (optional)
+    // To use a real TTF: add a file at app/src/main/res/font/scribble.ttf and replace FontFamily.Default below with
+    // FontFamily(Font(resId = R.font.scribble))
+    val scribble = FontFamily.Default
+
+    Card(modifier = Modifier
+        .fillMaxWidth()
+        .padding(vertical = 6.dp)) {
+        Box(modifier = Modifier
+            .height(72.dp)
+            .fillMaxWidth()
+            .background(Color(0xFFFFFDF5))) {
+
+            Text(
+                text = task.text,
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 20.dp)
+                    .onGloballyPositioned { coords ->
+                        textHeightPx = coords.size.height
+                    },
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    color = if (task.isDone) Color.Gray else Color.Black,
+                    textDecoration = if (task.isDone) TextDecoration.LineThrough else TextDecoration.None,
+                    fontFamily = scribble
+                )
+            )
+
+            DrawingOverlay(
+                modifier = Modifier.matchParentSize(),
+                isCompleted = task.isDone,
+                textHeight = textHeightPx.toFloat(),
+                restoredStrokes = restoredStrokes,
+                onStrokeComplete = { points ->
+                    // persist stroke and mark done
+                    scope.launch {
+                        val data = serializePath(points)
+                        vm.saveStroke(task.id, data)
+                        vm.markDone(task.id)
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun DrawingOverlay(
+    modifier: Modifier = Modifier,
+    isCompleted: Boolean,
+    textHeight: Float,
+    restoredStrokes: List<List<Offset>> = emptyList(),
+    onStrokeComplete: (List<Offset>) -> Unit
+) {
+    val points = remember { mutableStateListOf<Offset>() }
+    var canvasSize by remember { mutableStateOf(IntSize(0, 0)) }
+
+    // spring animation for strike
+    val progress by animateFloatAsState(targetValue = if (isCompleted) 1f else 0f, animationSpec = spring())
+
+    Canvas(modifier = modifier
+        .onSizeChanged { canvasSize = it }
+        .pointerInput(isCompleted, textHeight) {
+            detectDragGestures(
+                onDragStart = { offset: Offset ->
+                    points.clear()
+                    points.add(offset)
+                },
+                onDrag = { change: PointerInputChange, _: Offset ->
+                    points.add(change.position)
+                    change.consume()
+                },
+                onDragEnd = {
+                    if (points.size >= 2) {
+                        val start = points.first()
+                        val end = points.last()
+                        val dx = end.x - start.x
+                        val dy = end.y - start.y
+                        val ang = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
+                        val length = hypot(dx, dy)
+
+                        val minX = points.minOf { it.x }
+                        val maxX = points.maxOf { it.x }
+                        val minY = points.minOf { it.y }
+                        val maxY = points.maxOf { it.y }
+
+                        val coverageRatio = if (canvasSize.width > 0) (maxX - minX) / canvasSize.width else 0f
+                        val canvasCenterY = canvasSize.height / 2f
+                        val intersectsText = (maxY >= (canvasCenterY - textHeight / 2f) && minY <= (canvasCenterY + textHeight / 2f))
+
+                        // tuned heuristics: require at least 60% width and angle within 20deg and moderate speed (not enforced here)
+                        if (coverageRatio > 0.6f && abs(ang) < 20f && intersectsText && length > 40f) {
+                            onStrokeComplete(points.toList())
+                        }
+                    }
+                    points.clear()
+                },
+                onDragCancel = { points.clear() }
+            )
+        }
+    ) {
+        // draw restored strokes
+        restoredStrokes.forEach { stroke ->
+            if (stroke.size >= 2) {
+                val path = Path().apply {
+                    moveTo(stroke.first().x, stroke.first().y)
+                    stroke.drop(1).forEach { lineTo(it.x, it.y) }
+                }
+                drawPath(path, Color.Black, style = Stroke(width = 6f))
+            }
+        }
+
+        // draw live stroke
+        if (points.isNotEmpty()) {
+            val path = Path().apply {
+                moveTo(points.first().x, points.first().y)
+                for (i in 1 until points.size) lineTo(points[i].x, points[i].y)
+            }
+            drawPath(path, Color.Black, style = Stroke(width = 6f))
+        }
+
+        // animated clean strike
+        if (isCompleted && canvasSize.height > 0) {
+            val y = canvasSize.height / 2f
+            val startX = 0f
+            val endX = size.width
+            val currentEnd = startX + (endX - startX) * progress
+            drawLine(color = Color.Black, start = Offset(startX, y), end = Offset(currentEnd, y), strokeWidth = 6f)
+        }
     }
 }

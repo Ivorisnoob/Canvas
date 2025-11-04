@@ -1,0 +1,41 @@
+package com.sameerasw.doodlist.ui
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.sameerasw.doodlist.data.AppDatabase
+import com.sameerasw.doodlist.data.Repository
+import com.sameerasw.doodlist.data.StrokeEntity
+import com.sameerasw.doodlist.data.TaskEntity
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+class TaskViewModel(application: Application) : AndroidViewModel(application) {
+    private val db = AppDatabase.getInstance(application)
+    private val repo = Repository(db)
+
+    val tasks: StateFlow<List<TaskEntity>> = repo.getTasks()
+        .map { it }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun addTask(text: String) = viewModelScope.launch {
+        repo.insertTask(TaskEntity(text = text))
+    }
+
+    fun markDone(id: Long) = viewModelScope.launch {
+        // fetch the current entity from the state flow and update
+        val task = tasks.value.firstOrNull { it.id == id } ?: return@launch
+        repo.updateTask(task.copy(isDone = true))
+    }
+
+    fun saveStroke(taskId: Long, pathData: String) = viewModelScope.launch {
+        // delete old strokes and store this one (for simplicity store last stroke only)
+        repo.deleteStrokesForTask(taskId)
+        repo.insertStroke(StrokeEntity(taskId = taskId, pathData = pathData))
+    }
+
+    fun getStrokesFlow(taskId: Long) = repo.getStrokesForTask(taskId)
+}
