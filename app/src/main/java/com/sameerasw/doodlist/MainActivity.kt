@@ -68,6 +68,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalHapticFeedback
 import com.sameerasw.doodlist.utils.HapticUtil
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlin.math.max
 
 @OptIn(ExperimentalMaterial3Api::class)
 enum class ToolType {
@@ -223,6 +228,7 @@ fun CanvasApp(viewModel: CanvasViewModel) {
                          onClick = {
                              currentTool = ToolType.HAND
                              showPenOptions = false
+                             HapticUtil.performToggleOn(haptics)
                          }
                      ) {
                          Icon(
@@ -245,7 +251,7 @@ fun CanvasApp(viewModel: CanvasViewModel) {
                              } else {
                                  currentTool = ToolType.PEN
                                  showPenOptions = false
-                                 HapticUtil.performLightTick(haptics)
+                                 HapticUtil.performToggleOn(haptics)
                              }
                          }
                      ) {
@@ -293,7 +299,7 @@ fun CanvasApp(viewModel: CanvasViewModel) {
                          onClick = {
                              currentTool = ToolType.ERASER
                              showPenOptions = false
-                             HapticUtil.performLightTick(haptics)
+                             HapticUtil.performToggleOn(haptics)
                          }
                      ) {
                          Icon(
@@ -311,7 +317,7 @@ fun CanvasApp(viewModel: CanvasViewModel) {
                          onClick = {
                              currentTool = ToolType.TEXT
                              showPenOptions = false
-                             HapticUtil.performLightTick(haptics)
+                             HapticUtil.performToggleOn(haptics)
                          }
                      ) {
                          Icon(
@@ -343,6 +349,11 @@ fun DrawingCanvas(
 ) {
     val haptics = LocalHapticFeedback.current
     var drawingHapticJob by remember { mutableStateOf<Job?>(null) }
+
+    // track movement speed on screen (px/s) to adapt haptic rate
+    var lastMoveTime by remember { mutableStateOf(0L) }
+    var lastMovePos by remember { mutableStateOf(Offset.Zero) }
+    var currentSpeed by remember { mutableStateOf(0f) }
 
     var scale by remember { mutableStateOf(1f) }
     var offsetX by remember { mutableStateOf(0f) }
@@ -401,10 +412,27 @@ fun DrawingCanvas(
                             // store pending position in world coords
                             pendingTextPosition = worldStart
                         }
-                        // start subtle repeating haptic while drawing with pen
+                        // start adaptive repeating haptic while drawing with pen
                         if (currentTool == ToolType.PEN) {
                             drawingHapticJob?.cancel()
-                            drawingHapticJob = HapticUtil.startLoadingHaptics(haptics)
+                            // launch coroutine that adjusts tick rate based on currentSpeed
+                            drawingHapticJob = CoroutineScope(Dispatchers.Main).launch {
+                                val minInterval = 10L    // fastest tick (ms)
+                                val maxInterval = 450L   // slowest tick (ms)
+                                val speedForMax = 300f  // px/s at which interval is minInterval
+                                val stationaryThreshold = 60f // px/s below which we suppress ticks
+                                while (isActive) {
+                                    val sp = currentSpeed
+                                    if (sp < stationaryThreshold) {
+                                        // don't tick when barely moving; poll occasionally
+                                        kotlinx.coroutines.delay(200L)
+                                        continue
+                                    }
+                                    val t = ((maxInterval - minInterval) * (1f - (sp.coerceAtMost(speedForMax) / speedForMax))).toLong() + minInterval
+                                    HapticUtil.performLightTick(haptics)
+                                    kotlinx.coroutines.delay(max(20L, t))
+                                }
+                            }
                         }
                      },
                     onDrag = { change: PointerInputChange, _ ->
@@ -425,7 +453,23 @@ fun DrawingCanvas(
 
                         val worldPos = Offset((change.position.x - offsetX) / scale, (change.position.y - offsetY) / scale)
                         currentStroke.add(worldPos)
-                        change.consume()
+                        // update screen-space movement speed
+                        val now = System.currentTimeMillis()
+                        val pos = change.position
+                        if (lastMoveTime == 0L) {
+                            lastMoveTime = now
+                            lastMovePos = pos
+                            currentSpeed = 0f
+                        } else {
+                            val dt = (now - lastMoveTime).coerceAtLeast(1L)
+                            val dist = kotlin.math.hypot(pos.x - lastMovePos.x, pos.y - lastMovePos.y)
+                            val instSpeed = (dist / dt) * 1000f // px/s
+                            // smooth speed value
+                            currentSpeed = currentSpeed * 0.6f + instSpeed * 0.4f
+                            lastMoveTime = now
+                            lastMovePos = pos
+                        }
+                         change.consume()
 
                         when (currentTool) {
                             ToolType.HAND -> {
@@ -482,18 +526,24 @@ fun DrawingCanvas(
                             val newStroke = DrawStroke(currentStroke.toList(), strokeColor, width = penWidth)
                             onAddStroke?.invoke(newStroke)
                         }
-                        // stop drawing haptics
+                        // stop drawing haptics and reset speed
                         drawingHapticJob?.cancel()
                         drawingHapticJob = null
+                        currentSpeed = 0f
+                        lastMoveTime = 0L
+                        lastMovePos = Offset.Zero
                         currentStroke.clear()
                         // finish moving
                         isMovingText = false
                         selectedTextId = null
                     },
                     onDragCancel = {
-                        // stop drawing haptics
+                        // stop drawing haptics and reset speed
                         drawingHapticJob?.cancel()
                         drawingHapticJob = null
+                        currentSpeed = 0f
+                        lastMoveTime = 0L
+                        lastMovePos = Offset.Zero
                         currentStroke.clear()
                         isMovingText = false
                         selectedTextId = null
@@ -538,6 +588,8 @@ fun DrawingCanvas(
                             val p1 = world
                             val p2 = Offset(world.x + delta, world.y + delta)
                             onAddStroke?.invoke(DrawStroke(listOf(p1, p2), strokeColor, width = penWidth))
+                            // regular click haptic for dot add
+                            HapticUtil.performClick(haptics)
                             return@detectTapGestures
                         }
 
