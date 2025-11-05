@@ -280,13 +280,11 @@ fun CanvasApp(viewModel: CanvasViewModel) {
                 .padding(bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (showColorPicker) {
-                com.sameerasw.canvas.ui.components.ColorPicker(
-                    selectedColor = currentColor,
-                    onColorSelected = { currentColor = it }
-                )
-                Spacer(modifier = Modifier.size(6.dp))
-            }
+            com.sameerasw.canvas.ui.components.ColorPicker(
+                visible = showColorPicker,
+                selectedColor = currentColor,
+                onColorSelected = { currentColor = it }
+            )
 
             PenWidthOptionsPanel(
                 visible = showPenOptions && currentTool == ToolType.PEN,
