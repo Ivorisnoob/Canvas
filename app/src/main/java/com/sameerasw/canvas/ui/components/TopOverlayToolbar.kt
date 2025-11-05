@@ -1,11 +1,15 @@
 package com.sameerasw.canvas.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -13,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.platform.LocalHapticFeedback
 import com.sameerasw.canvas.R
 import com.sameerasw.canvas.utils.HapticUtil
@@ -38,6 +44,11 @@ fun TopOverlayToolbar(
     menuOpen: Boolean,
     onMenuToggle: () -> Unit,
     onUndo: () -> Unit,
+    // new param to control undo visibility
+    canUndo: Boolean,
+    // existing redo params
+    canRedo: Boolean,
+    onRedo: () -> Unit,
     menuContent: @Composable () -> Unit
 ) {
     val arrowRotation by animateFloatAsState(
@@ -47,7 +58,7 @@ fun TopOverlayToolbar(
 
     val haptics = LocalHapticFeedback.current
 
-    AnimatedVisibility(
+    androidx.compose.animation.AnimatedVisibility(
         visible = visible,
         enter = slideInVertically(initialOffsetY = { -it }, animationSpec = tween(260)),
         exit = slideOutVertically(targetOffsetY = { -it }, animationSpec = tween(220))
@@ -70,7 +81,9 @@ fun TopOverlayToolbar(
                 contentAlignment = Alignment.Center
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .animateContentSize(animationSpec = tween(220)),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
@@ -85,15 +98,40 @@ fun TopOverlayToolbar(
                                 .animateContentSize(animationSpec = tween(220)),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(onClick = {
-                                HapticUtil.performClick(haptics)
-                                onUndo()
-                            }) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.rounded_undo_24),
-                                    contentDescription = "Undo",
-                                    tint = MaterialTheme.colorScheme.onSurface
-                                )
+                            // Undo: only in layout when visible, expand/shrink horizontally with fade
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = canUndo,
+                                enter = expandHorizontally(animationSpec = tween<IntSize>(durationMillis = 220, easing = FastOutSlowInEasing)) + fadeIn(animationSpec = tween<Float>(durationMillis = 220, easing = FastOutSlowInEasing)),
+                                exit = shrinkHorizontally(animationSpec = tween<IntSize>(durationMillis = 200, easing = FastOutSlowInEasing)) + fadeOut(animationSpec = tween<Float>(durationMillis = 200, easing = FastOutSlowInEasing))
+                            ) {
+                                IconButton(onClick = {
+                                    HapticUtil.performClick(haptics)
+                                    onUndo()
+                                }, modifier = Modifier.size(40.dp)) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.rounded_undo_24),
+                                        contentDescription = "Undo",
+                                        tint = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+
+                            // Redo: only in layout when visible
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = canRedo,
+                                enter = expandHorizontally(animationSpec = tween<IntSize>(durationMillis = 220, easing = FastOutSlowInEasing)) + fadeIn(animationSpec = tween<Float>(durationMillis = 220, easing = FastOutSlowInEasing)),
+                                exit = shrinkHorizontally(animationSpec = tween<IntSize>(durationMillis = 200, easing = FastOutSlowInEasing)) + fadeOut(animationSpec = tween<Float>(durationMillis = 200, easing = FastOutSlowInEasing))
+                            ) {
+                                IconButton(onClick = {
+                                    HapticUtil.performClick(haptics)
+                                    onRedo()
+                                }, modifier = Modifier.size(40.dp)) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.rounded_redo_24),
+                                        contentDescription = "Redo",
+                                        tint = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
                             }
 
                             IconButton(onClick = {

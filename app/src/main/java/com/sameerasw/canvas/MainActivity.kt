@@ -159,15 +159,20 @@ fun CanvasApp(viewModel: CanvasViewModel) {
         // Top overlay toolbar
         // If pinned, always visible; otherwise visible when expanded
         val topVisible = pinTopToolbar || expanded
+        val canRedoState by viewModel.canRedo.collectAsState()
+        val canUndoState by viewModel.canUndo.collectAsState()
         TopOverlayToolbar(
             visible = topVisible,
             menuOpen = topMenuOpen,
             onMenuToggle = { topMenuOpen = !topMenuOpen },
             onUndo = {
-                if (strokes.isNotEmpty()) {
-                    viewModel.setStrokes(strokes.dropLast(1))
-                }
+                // use viewModel.undo() so redo stack is populated and redo becomes available
+                viewModel.undo()
             },
+            // new redo wiring
+            canUndo = canUndoState,
+            canRedo = canRedoState,
+            onRedo = { viewModel.redo() },
             menuContent = {
                 TopMenuButtons(
                     visible = topMenuOpen,
