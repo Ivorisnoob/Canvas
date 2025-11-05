@@ -38,8 +38,11 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import com.sameerasw.canvas.ui.drawing.BitmapStorageHelper
+import com.sameerasw.canvas.ui.theme.CanvasTheme
+import com.sameerasw.canvas.utils.HapticUtil
 import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -62,6 +65,7 @@ class CropActivity : ComponentActivity() {
             val context = LocalContext.current
             var bitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
             val scope = rememberCoroutineScope()
+            val haptics = LocalHapticFeedback.current
 
             // UI state for transform gestures
             var boxWidth by remember { mutableStateOf(1f) }
@@ -70,28 +74,48 @@ class CropActivity : ComponentActivity() {
             var transformScale by remember { mutableStateOf(1f) } // multiplier on top of baseScale
             var offset by remember { mutableStateOf(Offset.Zero) } // translation in view pixels
 
-            // Load bitmap from uri
-            LaunchedEffect(imageUri) {
-                bitmap = try {
-                    withContext(Dispatchers.IO) {
-                        val stream: InputStream? = context.contentResolver.openInputStream(imageUri)
-                        stream.use {
-                            BitmapFactory.decodeStream(it)
+            CanvasTheme {
+                // Load bitmap from uri
+                LaunchedEffect(imageUri) {
+                    bitmap = try {
+                        withContext(Dispatchers.IO) {
+                            val stream: InputStream? =
+                                context.contentResolver.openInputStream(imageUri)
+                            stream.use {
+                                BitmapFactory.decodeStream(it)
+                            }
                         }
+                    } catch (e: Exception) {
+                        null
                     }
-                } catch (e: Exception) {
-                    null
                 }
             }
 
             Box(modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(bitmap) {
-                    detectTransformGestures { centroid, pan, zoom, _ ->
-                        // Simple, responsive transform: adjust scale and translation
-                        val newScale = (transformScale * zoom).coerceIn(0.2f, 6f)
-                        transformScale = newScale
-                        offset += pan
+                    // Loop so each gesture resets emittedStartTick when detectTransformGestures returns
+                    while (true) {
+                        var emittedStartTick = false
+                        detectTransformGestures { centroid, pan, zoom, _ ->
+                            val panLen = kotlin.math.hypot(pan.x, pan.y)
+                            val zoomDelta = kotlin.math.abs(zoom - 1f)
+                            if (!emittedStartTick && (panLen > 2f || zoomDelta > 0.01f)) {
+                                HapticUtil.performLightTick(haptics)
+                                emittedStartTick = true
+                            }
+
+                            // adjust scale and translation
+                            val newScale = (transformScale * zoom).coerceIn(0.2f, 6f)
+                            transformScale = newScale
+                            offset += pan
+
+                            // emit a subtle variable tick proportional to zoom magnitude
+                            val strength = (zoomDelta * 2f).coerceIn(0f, 1f)
+                            if (zoomDelta > 0.002f) {
+                                HapticUtil.performVariableTick(haptics, strength)
+                            }
+                        }
                     }
                 }
                 .onGloballyPositioned { layoutCoordinates ->
@@ -179,7 +203,7 @@ class CropActivity : ComponentActivity() {
                             .padding(bottom = 24.dp),
                             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center) {
                             Button(
-                                onClick = { finish() },
+                                onClick = { HapticUtil.performClick(haptics); finish() },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.secondary,
                                     contentColor = MaterialTheme.colorScheme.onSecondary
@@ -190,6 +214,7 @@ class CropActivity : ComponentActivity() {
                             androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(16.dp))
                             Button(
                                 onClick = {
+                                    HapticUtil.performClick(haptics)
                                     // perform crop based on fixed square
                                     scope.launch {
                                         // compute requested crop in bitmap pixel coordinates

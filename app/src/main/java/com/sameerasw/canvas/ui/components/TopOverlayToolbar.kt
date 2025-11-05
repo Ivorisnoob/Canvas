@@ -28,7 +28,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.platform.LocalHapticFeedback
 import com.sameerasw.canvas.R
+import com.sameerasw.canvas.utils.HapticUtil
 
 @Composable
 fun TopOverlayToolbar(
@@ -42,6 +44,8 @@ fun TopOverlayToolbar(
         targetValue = if (menuOpen) 180f else 0f,
         animationSpec = tween(220)
     )
+
+    val haptics = LocalHapticFeedback.current
 
     AnimatedVisibility(
         visible = visible,
@@ -81,7 +85,10 @@ fun TopOverlayToolbar(
                                 .animateContentSize(animationSpec = tween(220)),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(onClick = onUndo) {
+                            IconButton(onClick = {
+                                HapticUtil.performClick(haptics)
+                                onUndo()
+                            }) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.rounded_undo_24),
                                     contentDescription = "Undo",
@@ -89,7 +96,10 @@ fun TopOverlayToolbar(
                                 )
                             }
 
-                            IconButton(onClick = onMenuToggle) {
+                            IconButton(onClick = {
+                                HapticUtil.performClick(haptics)
+                                onMenuToggle()
+                            }) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.rounded_arrow_forward_ios_24),
                                     contentDescription = "Top menu",
@@ -106,4 +116,3 @@ fun TopOverlayToolbar(
         }
     }
 }
-

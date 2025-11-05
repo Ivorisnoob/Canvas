@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.sameerasw.canvas.R
+import androidx.compose.ui.platform.LocalHapticFeedback
+import com.sameerasw.canvas.utils.HapticUtil
 
 @Composable
 fun TopMenuButtons(
@@ -26,6 +28,8 @@ fun TopMenuButtons(
     onSettings: () -> Unit,
     onAbout: () -> Unit
 ) {
+    val haptics = LocalHapticFeedback.current
+
     AnimatedVisibility(
         visible = visible,
         enter = slideInHorizontally(initialOffsetX = { it }),
@@ -35,35 +39,50 @@ fun TopMenuButtons(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onShare) {
+            IconButton(onClick = {
+                HapticUtil.performClick(haptics)
+                onShare()
+            }) {
                 Icon(
                     painter = painterResource(id = R.drawable.rounded_ios_share_24),
                     contentDescription = "Share"
                 )
             }
 
-            IconButton(onClick = onSave) {
+            IconButton(onClick = {
+                HapticUtil.performClick(haptics)
+                onSave()
+            }) {
                 Icon(
                     painter = painterResource(id = R.drawable.rounded_download_24),
                     contentDescription = "Save"
                 )
             }
 
-            IconButton(onClick = onClear) {
+            IconButton(onClick = {
+                HapticUtil.performClick(haptics)
+                onClear()
+            }) {
                 Icon(
                     painter = painterResource(id = R.drawable.rounded_cleaning_services_24),
                     contentDescription = "Clear all"
                 )
             }
 
-            IconButton(onClick = onSettings) {
+            IconButton(onClick = {
+                HapticUtil.performClick(haptics)
+                onSettings()
+            }) {
                 Icon(
                     painter = painterResource(id = R.drawable.rounded_settings_24),
                     contentDescription = "Settings"
                 )
             }
 
-            IconButton(onClick = onAbout) {
+            IconButton(onClick = {
+                HapticUtil.performClick(haptics)
+                onAbout()
+            }) {
                 Icon(
                     painter = painterResource(id = R.drawable.rounded_info_24),
                     contentDescription = "About"
@@ -72,4 +91,3 @@ fun TopMenuButtons(
         }
     }
 }
-

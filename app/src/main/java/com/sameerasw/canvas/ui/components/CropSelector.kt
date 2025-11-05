@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -54,10 +55,10 @@ fun CropSelector(
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)) {
-            Button(onClick = { onConfirm(Rect(left.value, top.value, right.value, bottom.value)) }, modifier = Modifier.offset { IntOffset(0, -40) }) {
+            Button(onClick = { onConfirm(Rect(left.value, top.value, right.value, bottom.value)) }, modifier = Modifier.background(MaterialTheme.colorScheme.primary).offset { IntOffset(0, -40) }) {
                 Text("Confirm")
             }
-            Button(onClick = onCancel, modifier = Modifier.offset { IntOffset(140, -40) }) {
+            Button(onClick = onCancel, modifier = Modifier.background(MaterialTheme.colorScheme.primary).offset { IntOffset(140, -40) }) {
                 Text("Cancel")
             }
         }
