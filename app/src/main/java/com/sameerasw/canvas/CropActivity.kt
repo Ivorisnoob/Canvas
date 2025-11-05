@@ -8,17 +8,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -202,165 +201,133 @@ class CropActivity : ComponentActivity() {
                              }
 
                             // Bottom buttons: Cancel and Confirm centered
-                            Column(
+                            Box(
                                 modifier = Modifier
-                                    .background(MaterialTheme.colorScheme.surfaceContainer),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = androidx.compose.foundation.layout.Arrangement.Bottom
+                                    .fillMaxSize(),
+                                contentAlignment = Alignment.BottomCenter
                             ) {
-                                Row(
+                                Surface(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 16.dp),
-                                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center
+                                        .padding(bottom = 24.dp)
+                                        .padding(horizontal = 16.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    tonalElevation = 0.dp
                                 ) {
-                                    Text(
-                                        text = "Crop to continue",
-                                        color = MaterialTheme.colorScheme.onBackground
-                                    )
-                                }
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 24.dp),
-                                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center
-                                ) {
-                                    if (isShare) {
-                                        // When sharing, show Cancel | Save | Share
-                                        Button(
-                                            onClick = { HapticUtil.performClick(haptics); finish() },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.secondary,
-                                                contentColor = MaterialTheme.colorScheme.onSecondary
-                                            )
-                                        ) {
-                                            Text("Cancel")
-                                        }
+                                    Column(
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(
+                                            text = "Crop to continue",
+                                            color = MaterialTheme.colorScheme.onBackground
+                                        )
                                         androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(12.dp))
 
-                                        Button(
-                                            onClick = {
-                                                HapticUtil.performClick(haptics)
-                                                // perform crop and save to Downloads but keep activity open
-                                                scope.launch {
-                                                    val outBmp = performCropAndCreateBitmap(bmp, squareLeft, squareTop, squareSize, imageLeft, imageTop, baseScale, transformScale)
-                                                    if (outBmp == null) {
-                                                        Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
-                                                        return@launch
-                                                    }
-                                                    try {
-                                                        val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
-                                                        val filename = "canvas_crop_$ts.png"
-                                                        val uri = BitmapStorageHelper.saveBitmapToDownloads(context, outBmp, filename, android.graphics.Bitmap.CompressFormat.PNG)
-                                                        if (uri != null) {
-                                                            Toast.makeText(context, "Saved to Downloads", Toast.LENGTH_SHORT).show()
-                                                        } else {
-                                                            Toast.makeText(context, "Failed to save image", Toast.LENGTH_SHORT).show()
-                                                        }
-                                                    } catch (_: Exception) {
-                                                        Toast.makeText(context, "Failed to save image", Toast.LENGTH_SHORT).show()
-                                                    }
+                                        Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            if (isShare) {
+                                                // Cancel outlined, Save and Share primary
+                                                androidx.compose.material3.OutlinedButton(onClick = { HapticUtil.performClick(haptics); finish() }) {
+                                                    Text("Cancel")
                                                 }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                            )
-                                        ) {
-                                            Text("Save")
-                                        }
-                                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(12.dp))
 
-                                        Button(
-                                            onClick = {
-                                                HapticUtil.performClick(haptics)
-                                                // perform crop and share, then finish
-                                                scope.launch {
-                                                    val outBmp = performCropAndCreateBitmap(bmp, squareLeft, squareTop, squareSize, imageLeft, imageTop, baseScale, transformScale)
-                                                    if (outBmp == null) {
-                                                        Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
-                                                        return@launch
-                                                    }
-                                                    try {
-                                                        val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
-                                                        val filename = "canvas_crop_$ts.png"
-                                                        val uri = BitmapStorageHelper.saveBitmapToCacheAndGetUri(context, outBmp, filename, android.graphics.Bitmap.CompressFormat.PNG)
-                                                        if (uri != null) {
-                                                            val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                                                putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                                                                type = "image/png"
-                                                                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                            }
-                                                            try {
-                                                                context.startActivity(android.content.Intent.createChooser(shareIntent, "Share image"))
-                                                            } catch (_: Exception) {
-                                                                Toast.makeText(context, "No app available to share image", Toast.LENGTH_SHORT).show()
-                                                            }
-                                                        } else {
-                                                            Toast.makeText(context, "Failed to export image", Toast.LENGTH_SHORT).show()
+                                                Button(onClick = {
+                                                    HapticUtil.performClick(haptics)
+                                                    scope.launch {
+                                                        val outBmp = performCropAndCreateBitmap(bmp, squareLeft, squareTop, squareSize, imageLeft, imageTop, baseScale, transformScale)
+                                                        if (outBmp == null) {
+                                                            Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
+                                                            return@launch
                                                         }
-                                                    } catch (_: Exception) {
-                                                        Toast.makeText(context, "Failed to process image", Toast.LENGTH_SHORT).show()
-                                                    } finally {
-                                                        finish()
-                                                    }
-                                                }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.primary,
-                                                contentColor = MaterialTheme.colorScheme.onPrimary
-                                            )
-                                        ) {
-                                            Text("Share")
-                                        }
-                                    } else {
-                                        // Non-share flow: existing Cancel + Save (finish after saving)
-                                        Button(
-                                            onClick = { HapticUtil.performClick(haptics); finish() },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.secondary,
-                                                contentColor = MaterialTheme.colorScheme.onSecondary
-                                            )
-                                        ) {
-                                            Text("Cancel")
-                                        }
-                                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(16.dp))
-                                        Button(
-                                            onClick = {
-                                                HapticUtil.performClick(haptics)
-                                                scope.launch {
-                                                    val outBmp = performCropAndCreateBitmap(bmp, squareLeft, squareTop, squareSize, imageLeft, imageTop, baseScale, transformScale)
-                                                    if (outBmp == null) {
-                                                        Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
-                                                        return@launch
-                                                    }
-                                                    try {
-                                                        val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
-                                                        val filename = "canvas_crop_$ts.png"
-                                                        val uri = BitmapStorageHelper.saveBitmapToDownloads(context, outBmp, filename, android.graphics.Bitmap.CompressFormat.PNG)
-                                                        if (uri != null) {
-                                                            Toast.makeText(context, "Saved to Downloads", Toast.LENGTH_SHORT).show()
-                                                        } else {
+                                                        try {
+                                                            val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                                                            val filename = "canvas_crop_$ts.png"
+                                                            val uri = BitmapStorageHelper.saveBitmapToDownloads(context, outBmp, filename, android.graphics.Bitmap.CompressFormat.PNG)
+                                                            if (uri != null) {
+                                                                Toast.makeText(context, "Saved to Downloads", Toast.LENGTH_SHORT).show()
+                                                            } else {
+                                                                Toast.makeText(context, "Failed to save image", Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        } catch (_: Exception) {
                                                             Toast.makeText(context, "Failed to save image", Toast.LENGTH_SHORT).show()
                                                         }
-                                                    } catch (_: Exception) {
-                                                        Toast.makeText(context, "Failed to save image", Toast.LENGTH_SHORT).show()
-                                                    } finally {
-                                                        finish()
                                                     }
+                                                }) {
+                                                    Text("Save")
                                                 }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.primary,
-                                                contentColor = MaterialTheme.colorScheme.onPrimary
-                                            )
-                                        ) {
-                                            Text("Save")
+
+                                                Button(onClick = {
+                                                    HapticUtil.performClick(haptics)
+                                                    scope.launch {
+                                                        val outBmp = performCropAndCreateBitmap(bmp, squareLeft, squareTop, squareSize, imageLeft, imageTop, baseScale, transformScale)
+                                                        if (outBmp == null) {
+                                                            Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
+                                                            return@launch
+                                                        }
+                                                        try {
+                                                            val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                                                            val filename = "canvas_crop_$ts.png"
+                                                            val uri = BitmapStorageHelper.saveBitmapToCacheAndGetUri(context, outBmp, filename, android.graphics.Bitmap.CompressFormat.PNG)
+                                                            if (uri != null) {
+                                                                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                                                    type = "image/png"
+                                                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                                }
+                                                                try {
+                                                                    context.startActivity(android.content.Intent.createChooser(shareIntent, "Share image"))
+                                                                } catch (_: Exception) {
+                                                                    Toast.makeText(context, "No app available to share image", Toast.LENGTH_SHORT).show()
+                                                                }
+                                                            } else {
+                                                                Toast.makeText(context, "Failed to export image", Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        } catch (_: Exception) {
+                                                            Toast.makeText(context, "Failed to process image", Toast.LENGTH_SHORT).show()
+                                                        } finally {
+                                                            finish()
+                                                        }
+                                                    }
+                                                }) {
+                                                    Text("Share")
+                                                }
+                                            } else {
+                                                // Non-share flow: Cancel outlined + Save primary (finish after save)
+                                                androidx.compose.material3.OutlinedButton(onClick = { HapticUtil.performClick(haptics); finish() }) {
+                                                    Text("Cancel")
+                                                }
+                                                Button(onClick = {
+                                                    HapticUtil.performClick(haptics)
+                                                    scope.launch {
+                                                        val outBmp = performCropAndCreateBitmap(bmp, squareLeft, squareTop, squareSize, imageLeft, imageTop, baseScale, transformScale)
+                                                        if (outBmp == null) {
+                                                            Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
+                                                            return@launch
+                                                        }
+                                                        try {
+                                                            val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                                                            val filename = "canvas_crop_$ts.png"
+                                                            val uri = BitmapStorageHelper.saveBitmapToDownloads(context, outBmp, filename, android.graphics.Bitmap.CompressFormat.PNG)
+                                                            if (uri != null) {
+                                                                Toast.makeText(context, "Saved to Downloads", Toast.LENGTH_SHORT).show()
+                                                            } else {
+                                                                Toast.makeText(context, "Failed to save image", Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        } catch (_: Exception) {
+                                                            Toast.makeText(context, "Failed to save image", Toast.LENGTH_SHORT).show()
+                                                        } finally {
+                                                            finish()
+                                                        }
+                                                    }
+                                                }) {
+                                                    Text("Save")
+                                                }
+                                            }
                                         }
                                     }
-                                 }
-                             }
-                         }
+                                }
+                            }
+                        }
                      }
                  }
              }
