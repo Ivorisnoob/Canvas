@@ -396,12 +396,12 @@ fun CanvasApp(viewModel: CanvasViewModel) {
                 onTextTool = {
                     if (currentTool == ToolType.TEXT) {
                         showPenOptions = !showPenOptions
-                        showColorPicker = false
+                        showColorPicker = showPenOptions
                         HapticUtil.performClick(haptics)
                     } else {
                         currentTool = ToolType.TEXT
-                        showPenOptions = false
-                        showColorPicker = false
+                        showPenOptions = true
+                        showColorPicker = true
                         HapticUtil.performToggleOn(haptics)
                     }
                 },
@@ -471,13 +471,15 @@ fun CanvasApp(viewModel: CanvasViewModel) {
             if (selectedTextId != null) {
                 val existing = texts.firstOrNull { it.id == selectedTextId!! }
                 val sizeToUse = existing?.size ?: textSize
+                val colorToUse = existing?.color ?: currentColor
                 viewModel.updateText(
                     TextItem(
                         id = selectedTextId!!,
                         x = pendingTextPosition.x,
                         y = pendingTextPosition.y,
                         text = pendingTextValue,
-                        size = sizeToUse
+                        size = sizeToUse,
+                        color = colorToUse
                     )
                 )
             } else {
