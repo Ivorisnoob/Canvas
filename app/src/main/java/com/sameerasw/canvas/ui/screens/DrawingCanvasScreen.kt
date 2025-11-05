@@ -44,6 +44,9 @@ fun DrawingCanvasScreen(
     currentColor: androidx.compose.ui.graphics.Color,
     currentPenStyle: com.sameerasw.canvas.model.PenStyle,
     currentShapeType: com.sameerasw.canvas.model.ShapeType,
+    arrowWidth: Float = 5f,
+    shapeWidth: Float = 5f,
+    shapeFilled: Boolean = false,
     modifier: Modifier = Modifier,
     onAddStroke: ((DrawStroke) -> Unit)? = null,
     onRemoveStroke: ((predicate: (DrawStroke) -> Boolean) -> Unit)? = null,
@@ -86,7 +89,7 @@ fun DrawingCanvasScreen(
                     }
                 }
             }
-            .pointerInput(currentTool, penWidth, textSize, currentColor, currentPenStyle, currentShapeType) {
+            .pointerInput(currentTool, penWidth, textSize, currentColor, currentPenStyle, currentShapeType, arrowWidth, shapeWidth, shapeFilled) {
                 detectDragGestures(
                     onDragStart = { offset ->
                         currentStroke.clear()
@@ -145,9 +148,41 @@ fun DrawingCanvasScreen(
                                     val worldThreshold = eraserRadius / scale.value
                                     var removedAny = false
                                     onRemoveStroke?.invoke { stroke ->
-                                        val hit = stroke.points.any { point ->
-                                            val distance = hypot(worldPos.x - point.x, worldPos.y - point.y)
-                                            distance < worldThreshold
+                                        val hit = when {
+                                            // For shapes and arrows, check bounding box and geometry
+                                            stroke.isArrow || stroke.shapeType != null -> {
+                                                if (stroke.points.size >= 2) {
+                                                    val start = stroke.points.first()
+                                                    val end = stroke.points.last()
+                                                    // Check if eraser touches the line/shape
+                                                    val minX = kotlin.math.min(start.x, end.x) - worldThreshold
+                                                    val maxX = kotlin.math.max(start.x, end.x) + worldThreshold
+                                                    val minY = kotlin.math.min(start.y, end.y) - worldThreshold
+                                                    val maxY = kotlin.math.max(start.y, end.y) + worldThreshold
+                                                    worldPos.x in minX..maxX && worldPos.y in minY..maxY
+                                                } else false
+                                            }
+                                            // For regular strokes, check all line segments
+                                            else -> {
+                                                stroke.points.any { point ->
+                                                    val distance = hypot(worldPos.x - point.x, worldPos.y - point.y)
+                                                    distance < worldThreshold
+                                                } || stroke.points.zipWithNext().any { (p1, p2) ->
+                                                    // Check distance to line segment
+                                                    val dx = p2.x - p1.x
+                                                    val dy = p2.y - p1.y
+                                                    val lengthSquared = dx * dx + dy * dy
+                                                    if (lengthSquared == 0f) {
+                                                        hypot(worldPos.x - p1.x, worldPos.y - p1.y) < worldThreshold
+                                                    } else {
+                                                        val t = ((worldPos.x - p1.x) * dx + (worldPos.y - p1.y) * dy) / lengthSquared
+                                                        val clampedT = t.coerceIn(0f, 1f)
+                                                        val closestX = p1.x + clampedT * dx
+                                                        val closestY = p1.y + clampedT * dy
+                                                        hypot(worldPos.x - closestX, worldPos.y - closestY) < worldThreshold
+                                                    }
+                                                }
+                                            }
                                         }
                                         if (hit) removedAny = true
                                         hit
@@ -194,7 +229,7 @@ fun DrawingCanvasScreen(
                                     val newStroke = DrawStroke(
                                         listOf(start, end),
                                         currentColor,
-                                        width = penWidth,
+                                        width = arrowWidth,
                                         isArrow = true
                                     )
                                     onAddStroke?.invoke(newStroke)
@@ -207,8 +242,9 @@ fun DrawingCanvasScreen(
                                     val newStroke = DrawStroke(
                                         listOf(start, end),
                                         currentColor,
-                                        width = penWidth,
-                                        shapeType = currentShapeType
+                                        width = shapeWidth,
+                                        shapeType = currentShapeType,
+                                        isFilled = shapeFilled
                                     )
                                     onAddStroke?.invoke(newStroke)
                                 }
@@ -293,7 +329,7 @@ fun DrawingCanvasScreen(
                 }
                 stroke.shapeType != null && screenPoints.size >= 2 -> {
                     with(StrokeDrawer) {
-                        drawShape(screenPoints.first(), screenPoints.last(), stroke.shapeType, stroke.color, stroke.width * scale.value)
+                        drawShape(screenPoints.first(), screenPoints.last(), stroke.shapeType, stroke.color, stroke.width * scale.value, stroke.isFilled)
                     }
                 }
                 screenPoints.size >= 2 -> {
@@ -321,7 +357,7 @@ fun DrawingCanvasScreen(
                     val start = Offset(currentStroke.first().x * scale.value + offsetX.value, currentStroke.first().y * scale.value + offsetY.value)
                     val end = Offset(currentStroke.last().x * scale.value + offsetX.value, currentStroke.last().y * scale.value + offsetY.value)
                     with(StrokeDrawer) {
-                        drawArrow(start, end, currentColor, penWidth * scale.value)
+                        drawArrow(start, end, currentColor, arrowWidth * scale.value)
                     }
                 }
             }
@@ -330,7 +366,7 @@ fun DrawingCanvasScreen(
                     val start = Offset(currentStroke.first().x * scale.value + offsetX.value, currentStroke.first().y * scale.value + offsetY.value)
                     val end = Offset(currentStroke.last().x * scale.value + offsetX.value, currentStroke.last().y * scale.value + offsetY.value)
                     with(StrokeDrawer) {
-                        drawShape(start, end, currentShapeType, currentColor, penWidth * scale.value)
+                        drawShape(start, end, currentShapeType, currentColor, shapeWidth * scale.value, shapeFilled)
                     }
                 }
             }

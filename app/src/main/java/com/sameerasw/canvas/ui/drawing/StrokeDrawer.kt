@@ -102,11 +102,10 @@ object StrokeDrawer {
     }
 
     fun DrawScope.drawArrow(start: Offset, end: Offset, color: Color, width: Float) {
-        drawLine(color, start, end, strokeWidth = width)
-        
+        // Calculate arrow head
         val angle = atan2((end.y - start.y).toDouble(), (end.x - start.x).toDouble())
-        val arrowLength = width * 4f
-        val arrowAngle = Math.PI / 6
+        val arrowLength = (width * 3.5f).coerceAtLeast(12f)
+        val arrowAngle = Math.PI / 7
         
         val arrow1 = Offset(
             (end.x - arrowLength * cos(angle - arrowAngle)).toFloat(),
@@ -117,21 +116,44 @@ object StrokeDrawer {
             (end.y - arrowLength * sin(angle + arrowAngle)).toFloat()
         )
         
-        drawLine(color, end, arrow1, strokeWidth = width)
-        drawLine(color, end, arrow2, strokeWidth = width)
+        // Calculate where the line should stop (at the base of the arrow)
+        val arrowBase = Offset(
+            (end.x - arrowLength * 0.7f * cos(angle)).toFloat(),
+            (end.y - arrowLength * 0.7f * sin(angle)).toFloat()
+        )
+        
+        // Draw the main line (stopping before the arrow head)
+        drawLine(color, start, arrowBase, strokeWidth = width)
+        
+        // Draw filled arrow head as a triangle
+        val path = Path().apply {
+            moveTo(end.x, end.y)
+            lineTo(arrow1.x, arrow1.y)
+            lineTo(arrow2.x, arrow2.y)
+            close()
+        }
+        drawPath(path, color)
     }
 
-    fun DrawScope.drawShape(start: Offset, end: Offset, shapeType: ShapeType, color: Color, width: Float) {
+    fun DrawScope.drawShape(start: Offset, end: Offset, shapeType: ShapeType, color: Color, width: Float, isFilled: Boolean = false) {
         when (shapeType) {
             ShapeType.RECTANGLE -> {
                 val rect = Rect(start, end)
-                drawRect(color, topLeft = rect.topLeft, size = rect.size, style = Stroke(width = width))
+                if (isFilled) {
+                    drawRect(color, topLeft = rect.topLeft, size = rect.size)
+                } else {
+                    drawRect(color, topLeft = rect.topLeft, size = rect.size, style = Stroke(width = width))
+                }
             }
             ShapeType.CIRCLE -> {
                 val dx = end.x - start.x
                 val dy = end.y - start.y
                 val radius = sqrt(dx * dx + dy * dy)
-                drawCircle(color, radius = radius, center = start, style = Stroke(width = width))
+                if (isFilled) {
+                    drawCircle(color, radius = radius, center = start)
+                } else {
+                    drawCircle(color, radius = radius, center = start, style = Stroke(width = width))
+                }
             }
             ShapeType.TRIANGLE -> {
                 val path = Path().apply {
@@ -140,7 +162,11 @@ object StrokeDrawer {
                     lineTo(end.x, end.y)
                     close()
                 }
-                drawPath(path, color, style = Stroke(width = width))
+                if (isFilled) {
+                    drawPath(path, color)
+                } else {
+                    drawPath(path, color, style = Stroke(width = width))
+                }
             }
             ShapeType.LINE -> {
                 drawLine(color, start, end, strokeWidth = width)

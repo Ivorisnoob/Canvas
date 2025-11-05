@@ -48,24 +48,37 @@ object BitmapExportHelper {
                 s.isArrow -> {
                     val start = s.points.first()
                     val end = s.points.last()
-                    canvas.drawLine(start.x, start.y, end.x, end.y, paint)
                     
                     val angle = kotlin.math.atan2((end.y - start.y).toDouble(), (end.x - start.x).toDouble())
-                    val arrowLength = s.width * 4f
-                    val arrowAngle = Math.PI / 6
+                    val arrowLength = (s.width * 3.5f).coerceAtLeast(12f)
+                    val arrowAngle = Math.PI / 7
                     
                     val arrow1X = (end.x - arrowLength * kotlin.math.cos(angle - arrowAngle)).toFloat()
                     val arrow1Y = (end.y - arrowLength * kotlin.math.sin(angle - arrowAngle)).toFloat()
                     val arrow2X = (end.x - arrowLength * kotlin.math.cos(angle + arrowAngle)).toFloat()
                     val arrow2Y = (end.y - arrowLength * kotlin.math.sin(angle + arrowAngle)).toFloat()
                     
-                    canvas.drawLine(end.x, end.y, arrow1X, arrow1Y, paint)
-                    canvas.drawLine(end.x, end.y, arrow2X, arrow2Y, paint)
+                    val arrowBaseX = (end.x - arrowLength * 0.7f * kotlin.math.cos(angle)).toFloat()
+                    val arrowBaseY = (end.y - arrowLength * 0.7f * kotlin.math.sin(angle)).toFloat()
+                    
+                    canvas.drawLine(start.x, start.y, arrowBaseX, arrowBaseY, paint)
+                    
+                    val arrowPath = AndroidPath()
+                    arrowPath.moveTo(end.x, end.y)
+                    arrowPath.lineTo(arrow1X, arrow1Y)
+                    arrowPath.lineTo(arrow2X, arrow2Y)
+                    arrowPath.close()
+                    val prevStyle = paint.style
+                    paint.style = Paint.Style.FILL
+                    canvas.drawPath(arrowPath, paint)
+                    paint.style = prevStyle
                 }
                 s.shapeType != null -> {
                     val start = s.points.first()
                     val end = s.points.last()
                     val path = AndroidPath()
+                    
+                    paint.style = if (s.isFilled) Paint.Style.FILL else Paint.Style.STROKE
                     
                     when (s.shapeType) {
                         com.sameerasw.canvas.model.ShapeType.RECTANGLE -> {
@@ -90,6 +103,7 @@ object BitmapExportHelper {
                     if (s.shapeType != com.sameerasw.canvas.model.ShapeType.LINE) {
                         canvas.drawPath(path, paint)
                     }
+                    paint.style = Paint.Style.STROKE
                 }
                 else -> {
                     val path = AndroidPath()
@@ -177,19 +191,29 @@ object BitmapExportHelper {
                     val endX = end.x * transformScale + transformOffsetX
                     val endY = end.y * transformScale + transformOffsetY
                     
-                    canvas.drawLine(startX, startY, endX, endY, paint)
-                    
                     val angle = kotlin.math.atan2((endY - startY).toDouble(), (endX - startX).toDouble())
-                    val arrowLength = s.width * transformScale * 4f
-                    val arrowAngle = Math.PI / 6
+                    val arrowLength = (s.width * transformScale * 3.5f).coerceAtLeast(12f)
+                    val arrowAngle = Math.PI / 7
                     
                     val arrow1X = (endX - arrowLength * kotlin.math.cos(angle - arrowAngle)).toFloat()
                     val arrow1Y = (endY - arrowLength * kotlin.math.sin(angle - arrowAngle)).toFloat()
                     val arrow2X = (endX - arrowLength * kotlin.math.cos(angle + arrowAngle)).toFloat()
                     val arrow2Y = (endY - arrowLength * kotlin.math.sin(angle + arrowAngle)).toFloat()
                     
-                    canvas.drawLine(endX, endY, arrow1X, arrow1Y, paint)
-                    canvas.drawLine(endX, endY, arrow2X, arrow2Y, paint)
+                    val arrowBaseX = (endX - arrowLength * 0.7f * kotlin.math.cos(angle)).toFloat()
+                    val arrowBaseY = (endY - arrowLength * 0.7f * kotlin.math.sin(angle)).toFloat()
+                    
+                    canvas.drawLine(startX, startY, arrowBaseX, arrowBaseY, paint)
+                    
+                    val arrowPath = AndroidPath()
+                    arrowPath.moveTo(endX, endY)
+                    arrowPath.lineTo(arrow1X, arrow1Y)
+                    arrowPath.lineTo(arrow2X, arrow2Y)
+                    arrowPath.close()
+                    val prevStyle = paint.style
+                    paint.style = Paint.Style.FILL
+                    canvas.drawPath(arrowPath, paint)
+                    paint.style = prevStyle
                 }
                 s.shapeType != null -> {
                     val start = s.points.first()
@@ -199,6 +223,8 @@ object BitmapExportHelper {
                     val endX = end.x * transformScale + transformOffsetX
                     val endY = end.y * transformScale + transformOffsetY
                     val path = AndroidPath()
+                    
+                    paint.style = if (s.isFilled) Paint.Style.FILL else Paint.Style.STROKE
                     
                     when (s.shapeType) {
                         com.sameerasw.canvas.model.ShapeType.RECTANGLE -> {
@@ -223,6 +249,7 @@ object BitmapExportHelper {
                     if (s.shapeType != com.sameerasw.canvas.model.ShapeType.LINE) {
                         canvas.drawPath(path, paint)
                     }
+                    paint.style = Paint.Style.STROKE
                 }
                 else -> {
                     val path = AndroidPath()

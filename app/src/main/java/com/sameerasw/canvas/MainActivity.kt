@@ -112,9 +112,14 @@ fun CanvasApp(viewModel: CanvasViewModel) {
     var currentColor by remember { mutableStateOf(androidx.compose.ui.graphics.Color.Black) }
     var currentPenStyle by remember { mutableStateOf(com.sameerasw.canvas.model.PenStyle.NORMAL) }
     var currentShapeType by remember { mutableStateOf(com.sameerasw.canvas.model.ShapeType.RECTANGLE) }
+    var shapeFilled by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
     var showPenStyleSelector by remember { mutableStateOf(false) }
     var showShapeSelector by remember { mutableStateOf(false) }
+    
+    // Tool-specific widths
+    var arrowWidth by remember { mutableStateOf(5f) }
+    var shapeWidth by remember { mutableStateOf(5f) }
 
     // Canvas viewport tracking (pixels)
     var canvasScale by remember { mutableStateOf(1f) }
@@ -135,6 +140,9 @@ fun CanvasApp(viewModel: CanvasViewModel) {
             currentColor = currentColor,
             currentPenStyle = currentPenStyle,
             currentShapeType = currentShapeType,
+            arrowWidth = arrowWidth,
+            shapeWidth = shapeWidth,
+            shapeFilled = shapeFilled,
             modifier = Modifier
                 .fillMaxSize()
                 .onSizeChanged { size ->
@@ -310,6 +318,20 @@ fun CanvasApp(viewModel: CanvasViewModel) {
                         HapticUtil.performVariableTick(haptics, smoothedStrength)
                     }
                 }
+            )
+
+            com.sameerasw.canvas.ui.components.ArrowOptionsPanel(
+                visible = showPenOptions && currentTool == ToolType.ARROW,
+                arrowWidth = arrowWidth,
+                onArrowWidthChange = { arrowWidth = it }
+            )
+
+            com.sameerasw.canvas.ui.components.ShapeOptionsPanel(
+                visible = showPenOptions && currentTool == ToolType.SHAPE,
+                shapeWidth = shapeWidth,
+                shapeFilled = shapeFilled,
+                onShapeWidthChange = { shapeWidth = it },
+                onShapeFilledChange = { shapeFilled = it }
             )
 
             TextSizeOptionsPanel(
