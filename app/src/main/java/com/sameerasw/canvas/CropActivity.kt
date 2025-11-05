@@ -280,7 +280,7 @@ class CropActivity : ComponentActivity() {
                                             if (isShare) {
                                                 // Cancel outlined, Save and Share primary
                                                 OutlinedButton(onClick = { HapticUtil.performClick(haptics); finish() }) {
-                                                    Text("Cancel")
+                                                    Text("Back")
                                                 }
 
                                                 Button(onClick = {
