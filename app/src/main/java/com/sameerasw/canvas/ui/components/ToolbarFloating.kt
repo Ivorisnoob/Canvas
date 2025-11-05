@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,6 +19,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.sameerasw.canvas.R
@@ -45,7 +47,7 @@ fun ToolbarFloating(
         expanded = expanded,
         content = {
             FilledIconButton(
-                modifier = Modifier.width(if (expanded) 48.dp else 64.dp),
+                modifier = Modifier.width(64.dp).height(48.dp).scale(if (expanded) 1f else 1.2f),
                 onClick = onExpandToggle
             ) {
                 Icon(
