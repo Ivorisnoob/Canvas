@@ -16,11 +16,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +41,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.sameerasw.canvas.ui.drawing.BitmapStorageHelper
 import com.sameerasw.canvas.ui.theme.CanvasTheme
@@ -72,6 +76,10 @@ class CropActivity : ComponentActivity() {
                     var bitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
                     val scope = rememberCoroutineScope()
                     val haptics = LocalHapticFeedback.current
+
+                    // Aspect selection: 0=9:16 (vertical), 1=1:1 (square), 2=16:9 (horizontal)
+                    var selectedAspectIndex by remember { mutableStateOf(1) } // default 1:1
+                    val aspectRatios = listOf(9f/16f, 1f, 16f/9f)
 
                     // UI state for transform gestures
                     var boxWidth by remember { mutableStateOf(1f) }
@@ -157,50 +165,79 @@ class CropActivity : ComponentActivity() {
                             )
 
 
-                            // Fixed centered square overlay size (80% of the minimum axis)
-                            val squareSize = minOf(boxWidth, boxHeight) * 0.8f
-                            val squareLeft = (boxWidth - squareSize) / 2f
-                            val squareTop = (boxHeight - squareSize) / 2f
+                            // compute crop overlay size using selected aspect ratio
+                            val targetAspect = aspectRatios[selectedAspectIndex]
+                            val maxOverlayWidth = boxWidth * 0.9f
+                            val maxOverlayHeight = boxHeight * 0.5f
+                            // Determine overlay width/height constrained to max dims and aspect
+                            var overlayW = maxOverlayWidth
+                            var overlayH = overlayW / targetAspect
+                            if (overlayH > maxOverlayHeight) {
+                                overlayH = maxOverlayHeight
+                                overlayW = overlayH * targetAspect
+                            }
+                            val overlayLeft = (boxWidth - overlayW) / 2f
+                            val overlayTop = (boxHeight - overlayH) / 2f
 
-                            // capture theme colors here (composable scope) so the Canvas draw lambda doesn't call
-                            // @Composable APIs (MaterialTheme) from a non-composable scope
+                            // prepare colors (capture them outside Canvas so we don't call @Composable inside draw lambda)
                             val overlayColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                             val strokeColor = MaterialTheme.colorScheme.onBackground
 
-                            // dim outside the square and draw rounded outline using even-odd path
+                            // draw image and dim/outline overlay
                             Canvas(modifier = Modifier.fillMaxSize()) {
-                                 val cornerRadius = 12.dp.toPx()
+                                val cornerRadius = 12.dp.toPx()
 
-                                 val fullRect = ComposeRect(0f, 0f, size.width, size.height)
-                                 val holeRoundRect = RoundRect(
-                                     ComposeRect(
-                                         squareLeft,
-                                         squareTop,
-                                         squareLeft + squareSize,
-                                         squareTop + squareSize
-                                     ),
-                                     CornerRadius(cornerRadius, cornerRadius)
-                                 )
+                                val fullRect = ComposeRect(0f, 0f, size.width, size.height)
+                                val holeRoundRect = RoundRect(
+                                    ComposeRect(
+                                        overlayLeft,
+                                        overlayTop,
+                                        overlayLeft + overlayW,
+                                        overlayTop + overlayH
+                                    ),
+                                    CornerRadius(cornerRadius, cornerRadius)
+                                )
 
-                                 val path = Path().apply {
-                                     fillType = PathFillType.EvenOdd
-                                     addRect(fullRect)
-                                     addRoundRect(holeRoundRect)
-                                 }
+                                val path = Path().apply {
+                                    fillType = PathFillType.EvenOdd
+                                    addRect(fullRect)
+                                    addRoundRect(holeRoundRect)
+                                }
 
-                                 drawPath(path = path, color = overlayColor)
+                                drawPath(path = path, color = overlayColor)
+                                drawRoundRect(
+                                    color = strokeColor,
+                                    topLeft = Offset(overlayLeft, overlayTop),
+                                    size = androidx.compose.ui.geometry.Size(overlayW, overlayH),
+                                    cornerRadius = CornerRadius(cornerRadius, cornerRadius),
+                                    style = Stroke(width = 3f)
+                                )
+                            }
 
-                                 // Draw rounded stroke around the crop area using theme onBackground color
-                                 drawRoundRect(
-                                     color = strokeColor,
-                                     topLeft = Offset(squareLeft, squareTop),
-                                     size = androidx.compose.ui.geometry.Size(squareSize, squareSize),
-                                     cornerRadius = CornerRadius(cornerRadius, cornerRadius),
-                                     style = Stroke(width = 3f)
-                                 )
-                             }
+                            // Aspect picker UI: small icon-only segmented row placed above the bottom card
+                            Row(
+                                modifier = Modifier
+                                    .offset(y = (-120).dp)
+                                    .align(Alignment.BottomCenter),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // 9:16 icon
+                                IconButton(onClick = { selectedAspectIndex = 0 }) {
+                                    Icon(painter = painterResource(id = R.drawable.rounded_crop_9_16_24), contentDescription = "9:16")
+                                }
+                                // 1:1 icon
+                                IconButton(onClick = { selectedAspectIndex = 1 }) {
+                                    Icon(painter = painterResource(id = R.drawable.rounded_crop_square_24), contentDescription = "1:1")
+                                }
+                                // 16:9 icon
+                                IconButton(onClick = { selectedAspectIndex = 2 }) {
+                                    Icon(painter = painterResource(id = R.drawable.rounded_rectangle_24), contentDescription = "16:9")
+                                }
 
-                            // Bottom buttons: Cancel and Confirm centered
+                            }
+
+                            // Bottom card with Cancel/Save/Share
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize(),
@@ -224,7 +261,7 @@ class CropActivity : ComponentActivity() {
                                         )
                                         androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(12.dp))
 
-                                        Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                             if (isShare) {
                                                 // Cancel outlined, Save and Share primary
                                                 androidx.compose.material3.OutlinedButton(onClick = { HapticUtil.performClick(haptics); finish() }) {
@@ -234,7 +271,7 @@ class CropActivity : ComponentActivity() {
                                                 Button(onClick = {
                                                     HapticUtil.performClick(haptics)
                                                     scope.launch {
-                                                        val outBmp = performCropAndCreateBitmap(bmp, squareLeft, squareTop, squareSize, imageLeft, imageTop, baseScale, transformScale)
+                                                        val outBmp = performCropAndCreateBitmap(bmp, overlayLeft, overlayTop, overlayW, overlayH, imageLeft, imageTop, baseScale, transformScale)
                                                         if (outBmp == null) {
                                                             Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
                                                             return@launch
@@ -259,7 +296,7 @@ class CropActivity : ComponentActivity() {
                                                 Button(onClick = {
                                                     HapticUtil.performClick(haptics)
                                                     scope.launch {
-                                                        val outBmp = performCropAndCreateBitmap(bmp, squareLeft, squareTop, squareSize, imageLeft, imageTop, baseScale, transformScale)
+                                                        val outBmp = performCropAndCreateBitmap(bmp, overlayLeft, overlayTop, overlayW, overlayH, imageLeft, imageTop, baseScale, transformScale)
                                                         if (outBmp == null) {
                                                             Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
                                                             return@launch
@@ -299,7 +336,7 @@ class CropActivity : ComponentActivity() {
                                                 Button(onClick = {
                                                     HapticUtil.performClick(haptics)
                                                     scope.launch {
-                                                        val outBmp = performCropAndCreateBitmap(bmp, squareLeft, squareTop, squareSize, imageLeft, imageTop, baseScale, transformScale)
+                                                        val outBmp = performCropAndCreateBitmap(bmp, overlayLeft, overlayTop, overlayW, overlayH, imageLeft, imageTop, baseScale, transformScale)
                                                         if (outBmp == null) {
                                                             Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
                                                             return@launch
@@ -338,9 +375,10 @@ class CropActivity : ComponentActivity() {
 // compute and return the cropped bitmap, or null on failure
 private suspend fun performCropAndCreateBitmap(
     bmp: android.graphics.Bitmap,
-    squareLeft: Float,
-    squareTop: Float,
-    squareSize: Float,
+    overlayLeft: Float,
+    overlayTop: Float,
+    overlayW: Float,
+    overlayH: Float,
     imageLeft: Float,
     imageTop: Float,
     baseScale: Float,
@@ -349,16 +387,19 @@ private suspend fun performCropAndCreateBitmap(
     return withContext(Dispatchers.Default) {
         try {
             val scalePxPerBitmap = baseScale * transformScale
-            val reqLeftBitmapF = (squareLeft - imageLeft) / scalePxPerBitmap
-            val reqTopBitmapF = (squareTop - imageTop) / scalePxPerBitmap
-            val reqWBitmapF = squareSize / scalePxPerBitmap
-            val reqHBitmapF = squareSize / scalePxPerBitmap
+
+            // compute requested crop rect in view coords -> bitmap coords
+            val reqLeftBitmapF = (overlayLeft - imageLeft) / scalePxPerBitmap
+            val reqTopBitmapF = (overlayTop - imageTop) / scalePxPerBitmap
+            val reqWBitmapF = overlayW / scalePxPerBitmap
+            val reqHBitmapF = overlayH / scalePxPerBitmap
 
             val reqLeftBitmap = reqLeftBitmapF.toInt()
             val reqTopBitmap = reqTopBitmapF.toInt()
             val reqWBitmap = reqWBitmapF.toInt()
             val reqHBitmap = reqHBitmapF.toInt()
 
+            // Intersection with source bitmap
             val srcLeft = reqLeftBitmap.coerceAtLeast(0)
             val srcTop = reqTopBitmap.coerceAtLeast(0)
             val srcRight = (reqLeftBitmap + reqWBitmap).coerceAtMost(bmp.width)
