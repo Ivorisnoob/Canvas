@@ -207,25 +207,8 @@ class CropActivity : ComponentActivity() {
                             val overlayLeft = (viewWidth - overlayW) / 2f
                             val overlayTop = (viewHeight - overlayH) / 2f
 
-                            // Canvas with background color and content
+                            // Content Canvas: draw strokes and texts only (no underlying bitmap)
                             Canvas(modifier = Modifier.fillMaxSize()) {
-                                // Draw bitmap with transform
-                                val dispW = bmp.width * scale
-                                val dispH = bmp.height * scale
-
-                                // Draw the bitmap centered and transformed
-                                drawImage(
-                                    image = bmp.asImageBitmap(),
-                                    dstOffset = androidx.compose.ui.unit.IntOffset(
-                                        offsetX.toInt(),
-                                        offsetY.toInt()
-                                    ),
-                                    dstSize = androidx.compose.ui.unit.IntSize(
-                                        dispW.toInt(),
-                                        dispH.toInt()
-                                    )
-                                )
-
                                 // Draw strokes
                                 strokes.forEach { stroke ->
                                     if (stroke.points.size >= 2) {
@@ -261,7 +244,7 @@ class CropActivity : ComponentActivity() {
                             val overlayColor = Color.Black.copy(alpha = 0.55f)
                             val strokeColor = MaterialTheme.colorScheme.onBackground
 
-                            // Draw crop overlay
+                            // Draw crop overlay mask and border
                             Canvas(modifier = Modifier.fillMaxSize()) {
                                 val cornerRadius = 12.dp.toPx()
 
@@ -292,10 +275,9 @@ class CropActivity : ComponentActivity() {
                                 )
                             }
 
-                            // Bottom card with Cancel/Save/Share
+                            // Bottom controls (color picker + actions)
                             Box(
-                                modifier = Modifier
-                                    .fillMaxSize(),
+                                modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.BottomCenter
                             ) {
                                 Column(
