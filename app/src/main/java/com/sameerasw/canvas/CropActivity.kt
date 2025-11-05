@@ -2,7 +2,6 @@ package com.sameerasw.canvas
 
 import android.graphics.BitmapFactory
 import android.graphics.Rect as AndroidRect
-import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -47,6 +46,8 @@ import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
+import androidx.core.net.toUri
+import androidx.core.graphics.createBitmap
 
 class CropActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,7 +60,7 @@ class CropActivity : ComponentActivity() {
             return
         }
 
-        val imageUri = Uri.parse(imageUriString)
+        val imageUri = imageUriString.toUri()
 
         setContent {
             CanvasTheme {
@@ -88,7 +89,7 @@ class CropActivity : ComponentActivity() {
                                     BitmapFactory.decodeStream(it)
                                 }
                             }
-                        } catch (e: Exception) {
+                        } catch (_: Exception) {
                             null
                         }
                     }
@@ -270,7 +271,7 @@ class CropActivity : ComponentActivity() {
                                                 // Create output bitmap of requested size and draw the intersected portion at the correct offset
                                                 val outW = reqWBitmap.coerceAtLeast(1)
                                                 val outH = reqHBitmap.coerceAtLeast(1)
-                                                val outBmp = android.graphics.Bitmap.createBitmap(outW, outH, android.graphics.Bitmap.Config.ARGB_8888)
+                                                val outBmp = createBitmap(outW, outH)
                                                 val canvas = android.graphics.Canvas(outBmp)
                                                 canvas.drawColor(android.graphics.Color.WHITE)
 
@@ -285,7 +286,7 @@ class CropActivity : ComponentActivity() {
                                                 // Save / share
                                                 try {
                                                     val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
-                                                    val filename = "doodlist_crop_$ts.png"
+                                                    val filename = "canvas_crop_$ts.png"
                                                     if (isShare) {
                                                         val uri = BitmapStorageHelper.saveBitmapToCacheAndGetUri(context, outBmp, filename, android.graphics.Bitmap.CompressFormat.PNG)
                                                         if (uri != null) {
@@ -310,7 +311,7 @@ class CropActivity : ComponentActivity() {
                                                             Toast.makeText(context, "Failed to save image", Toast.LENGTH_SHORT).show()
                                                         }
                                                     }
-                                                } catch (e: Exception) {
+                                                } catch (_: Exception) {
                                                     Toast.makeText(context, "Failed to process image", Toast.LENGTH_SHORT).show()
                                                 } finally {
                                                     finish()

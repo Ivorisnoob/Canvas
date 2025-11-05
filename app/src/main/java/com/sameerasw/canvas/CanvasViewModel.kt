@@ -88,7 +88,6 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
                     _strokes.value = model.strokes
                     _texts.value = model.texts
                 } catch (_: Exception) {
-                    // handle old format: maybe only strokes were saved
                     try {
                         val type = object : TypeToken<List<DrawStroke>>() {}.type
                         val list: List<DrawStroke> = gson.fromJson(json, type)

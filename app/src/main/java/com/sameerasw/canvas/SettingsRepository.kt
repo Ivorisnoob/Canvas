@@ -7,7 +7,7 @@ import android.content.SharedPreferences
  * Simple preferences-backed repository to hold settings like Haptics level.
  */
 object SettingsRepository {
-    private const val PREFS_NAME = "doodlist_prefs"
+    private const val PREFS_NAME = "canvas_prefs"
     private const val KEY_HAPTICS_LEVEL = "haptics_level"
 
     enum class HapticsLevel(val value: Int) {
@@ -16,7 +16,7 @@ object SettingsRepository {
         FULL(2);
 
         companion object {
-            fun fromValue(v: Int) = values().firstOrNull { it.value == v } ?: FULL
+            fun fromValue(v: Int) = HapticsLevel.entries.firstOrNull { it.value == v } ?: FULL
         }
     }
 

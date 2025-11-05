@@ -27,7 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -172,7 +171,7 @@ fun CanvasApp(viewModel: CanvasViewModel) {
                         topMenuOpen = false
                         CoroutineScope(Dispatchers.Main).launch {
                             val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-                            val filename = "doodlist_full_$ts.png"
+                            val filename = "canvas_full_$ts.png"
                             val bmp = BitmapExportHelper.createBitmapFromData(context, strokes, texts, outputWidth = canvasViewSize.width.coerceAtLeast(1), outputHeight = canvasViewSize.height.coerceAtLeast(1))
                             if (bmp != null) {
                                 val uri = BitmapStorageHelper.saveBitmapToCacheAndGetUri(context, bmp, filename, android.graphics.Bitmap.CompressFormat.PNG)
@@ -194,7 +193,7 @@ fun CanvasApp(viewModel: CanvasViewModel) {
                         topMenuOpen = false
                         CoroutineScope(Dispatchers.Main).launch {
                             val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-                            val filename = "doodlist_full_$ts.png"
+                            val filename = "canvas_full_$ts.png"
                             val bmp = BitmapExportHelper.createBitmapFromData(context, strokes, texts, outputWidth = canvasViewSize.width.coerceAtLeast(1), outputHeight = canvasViewSize.height.coerceAtLeast(1))
                             if (bmp != null) {
                                 val uri = BitmapStorageHelper.saveBitmapToCacheAndGetUri(context, bmp, filename, android.graphics.Bitmap.CompressFormat.PNG)
