@@ -5,6 +5,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,44 +37,15 @@ fun ToolbarFloating(
     onShapeTool: () -> Unit
 ) {
     HorizontalFloatingToolbar(
-        modifier = Modifier,
+        modifier = Modifier
+            .then(
+                if (expanded) Modifier.fillMaxWidth(0.8f)
+                else Modifier
+            ),
         expanded = expanded,
-        leadingContent = {
-            // Hand tool
-            IconButton(
-                modifier = Modifier.width(if (expanded) 64.dp else 48.dp).then(if (currentTool == ToolType.HAND) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier),
-                onClick = onHandTool
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.rounded_back_hand_24),
-                    contentDescription = "Hand tool",
-                    tint = if (currentTool == ToolType.HAND) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.width(if (expanded) 28.dp else 24.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(if (expanded) 4.dp else (-4).dp))
-
-            // Pen tool
-            IconButton(
-                modifier = Modifier.width(if (expanded) 64.dp else 48.dp).then(if (currentTool == ToolType.PEN) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier),
-                onClick = onPenTool
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.rounded_stylus_fountain_pen_24),
-                    contentDescription = "Pen tool",
-                    tint = if (currentTool == ToolType.PEN) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.width(if (expanded) 28.dp else 24.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(if (expanded) 4.dp else (-4).dp))
-        },
         content = {
             FilledIconButton(
-                modifier = Modifier.width(if (expanded) 72.dp else 64.dp),
+                modifier = Modifier.width(if (expanded) 48.dp else 64.dp),
                 onClick = onExpandToggle
             ) {
                 Icon(
@@ -94,6 +66,7 @@ fun ToolbarFloating(
             }
         },
         trailingContent = {
+
             if (expanded) {
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -101,13 +74,42 @@ fun ToolbarFloating(
                 ) {
                     Spacer(modifier = Modifier.width(4.dp))
 
+                    // Hand tool
+                    IconButton(
+                        modifier = Modifier.width(if (expanded) 64.dp else 48.dp).then(if (currentTool == ToolType.HAND) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier),
+                        onClick = onHandTool
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.rounded_back_hand_24),
+                            contentDescription = "Hand tool",
+                            tint = if (currentTool == ToolType.HAND) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.width(if (expanded) 28.dp else 24.dp)
+                        )
+                    }
+
+                    // Pen tool
+                    IconButton(
+                        modifier = Modifier.width(if (expanded) 64.dp else 48.dp).then(if (currentTool == ToolType.PEN) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier),
+                        onClick = onPenTool
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.rounded_stylus_fountain_pen_24),
+                            contentDescription = "Pen tool",
+                            tint = if (currentTool == ToolType.PEN) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.width(if (expanded) 28.dp else 24.dp)
+                        )
+                    }
+
+
                     // Arrow tool
                     IconButton(
                         modifier = Modifier.width(64.dp).then(if (currentTool == ToolType.ARROW) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier),
                         onClick = onArrowTool
                     ) {
                         Icon(
-                            painter = painterResource(id = R.drawable.rounded_arrow_forward_ios_24),
+                            painter = painterResource(id = R.drawable.round_arrow_upward_24),
                             contentDescription = "Arrow tool",
                             tint = if (currentTool == ToolType.ARROW) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -121,7 +123,7 @@ fun ToolbarFloating(
                         onClick = onShapeTool
                     ) {
                         Icon(
-                            painter = painterResource(id = R.drawable.rounded_rectangle_24),
+                            painter = painterResource(id = R.drawable.shape_line_24px),
                             contentDescription = "Shape tool",
                             tint = if (currentTool == ToolType.SHAPE) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -160,9 +162,37 @@ fun ToolbarFloating(
             } else {
                 Spacer(modifier = Modifier.width((-4).dp))
 
+                // Hand tool
+                IconButton(
+                    modifier = Modifier.width(if (expanded) 64.dp else 48.dp).then(if (currentTool == ToolType.HAND) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier),
+                    onClick = onHandTool
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.rounded_back_hand_24),
+                        contentDescription = "Hand tool",
+                        tint = if (currentTool == ToolType.HAND) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.width(if (expanded) 28.dp else 24.dp)
+                    )
+                }
+
+                // Pen tool
+                IconButton(
+                    modifier = Modifier.width(if (expanded) 64.dp else 48.dp).then(if (currentTool == ToolType.PEN) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier),
+                    onClick = onPenTool
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.rounded_stylus_fountain_pen_24),
+                        contentDescription = "Pen tool",
+                        tint = if (currentTool == ToolType.PEN) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.width(if (expanded) 28.dp else 24.dp)
+                    )
+                }
+
                 // Arrow tool
                 IconButton(
-                    modifier = Modifier.width(48.dp).then(if (currentTool == ToolType.ARROW) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier),
+                    modifier = Modifier.width(64.dp).then(if (currentTool == ToolType.ARROW) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier),
                     onClick = onArrowTool
                 ) {
                     Icon(
@@ -170,15 +200,13 @@ fun ToolbarFloating(
                         contentDescription = "Arrow tool",
                         tint = if (currentTool == ToolType.ARROW) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(24.dp)
+                        modifier = Modifier.width(28.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width((-4).dp))
-
                 // Shape tool
                 IconButton(
-                    modifier = Modifier.width(48.dp).then(if (currentTool == ToolType.SHAPE) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier),
+                    modifier = Modifier.width(64.dp).then(if (currentTool == ToolType.SHAPE) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier),
                     onClick = onShapeTool
                 ) {
                     Icon(
@@ -186,15 +214,13 @@ fun ToolbarFloating(
                         contentDescription = "Shape tool",
                         tint = if (currentTool == ToolType.SHAPE) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(24.dp)
+                        modifier = Modifier.width(28.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width((-4).dp))
-
                 // Eraser tool
                 IconButton(
-                    modifier = Modifier.width(48.dp).then(if (currentTool == ToolType.ERASER) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier),
+                    modifier = Modifier.width(64.dp).then(if (currentTool == ToolType.ERASER) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier),
                     onClick = onEraserTool
                 ) {
                     Icon(
@@ -202,15 +228,13 @@ fun ToolbarFloating(
                         contentDescription = "Eraser tool",
                         tint = if (currentTool == ToolType.ERASER) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(24.dp)
+                        modifier = Modifier.width(28.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width((-4).dp))
-
                 // Text tool
                 IconButton(
-                    modifier = Modifier.width(48.dp).then(if (currentTool == ToolType.TEXT) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier),
+                    modifier = Modifier.width(64.dp).then(if (currentTool == ToolType.TEXT) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier),
                     onClick = onTextTool
                 ) {
                     Icon(
@@ -218,7 +242,7 @@ fun ToolbarFloating(
                         contentDescription = "Text tool",
                         tint = if (currentTool == ToolType.TEXT) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(24.dp)
+                        modifier = Modifier.width(28.dp)
                     )
                 }
             }
