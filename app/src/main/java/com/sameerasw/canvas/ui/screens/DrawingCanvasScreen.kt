@@ -300,16 +300,25 @@ fun DrawingCanvasScreen(
                                 HapticUtil.performClick(haptics)
                                 return@detectTapGestures
                             }
-                            else -> {}
-                        }
-
-                        if (currentTool == ToolType.TEXT) {
-                            val hit = texts.find { text ->
-                                val half = text.size
-                                world.x >= text.x - half && world.x <= text.x + half &&
-                                        world.y >= text.y - half && world.y <= text.y + half
+                            ToolType.TEXT -> {
+                                // Check if tapping on existing text
+                                val hit = texts.find { text ->
+                                    val half = text.size
+                                    world.x >= text.x - half && world.x <= text.x + half &&
+                                            world.y >= text.y - half && world.y <= text.y + half
+                                }
+                                
+                                if (hit != null) {
+                                    // Edit existing text
+                                    onShowTextOptions?.invoke(true, hit.id)
+                                } else {
+                                    // Add new text
+                                    onShowTextDialog?.invoke(true, world)
+                                }
+                                HapticUtil.performClick(haptics)
+                                return@detectTapGestures
                             }
-                            // Start moving text
+                            else -> {}
                         }
                     }
                 )
