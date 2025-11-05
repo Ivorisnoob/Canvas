@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.sameerasw.canvas.ui.theme.CanvasTheme
+import com.sameerasw.canvas.ui.theme.CanvasThemeWithMode
 
 class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,12 +42,15 @@ class SettingsActivity : ComponentActivity() {
         SettingsRepository.init(this)
 
         setContent {
-            CanvasTheme {
+            val themeMode = remember { mutableStateOf(SettingsRepository.getThemeMode()) }
+            CanvasThemeWithMode(themeMode = themeMode.value) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    SettingsScreen()
+                    SettingsScreen(onThemeModeChange = { newMode ->
+                        themeMode.value = newMode
+                    })
                 }
             }
         }
@@ -55,10 +59,11 @@ class SettingsActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(onThemeModeChange: (SettingsRepository.ThemeMode) -> Unit = {}) {
     var level by remember { mutableStateOf(SettingsRepository.getHapticsLevel().value.toFloat()) }
     var pinTop by remember { mutableStateOf(SettingsRepository.getPinTopToolbar()) }
     var canvasBackground by remember { mutableStateOf(SettingsRepository.getCanvasBackground()) }
+    var themeMode by remember { mutableStateOf(SettingsRepository.getThemeMode()) }
     val context = LocalContext.current
 
     Column(
@@ -173,6 +178,49 @@ fun SettingsScreen() {
                         },
                     ) {
                         Text(label)
+                    }
+                }
+            }
+
+            // Theme mode setting
+            Text(
+                text = "Theme",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 12.dp)
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+            ) {
+                val themeIcons = listOf(
+                    R.drawable.rounded_light_mode_24,
+                    R.drawable.rounded_cleaning_services_24,
+                    R.drawable.rounded_mode_night_24
+                )
+                val themeOptions = SettingsRepository.ThemeMode.entries
+
+                themeOptions.forEachIndexed { index, mode ->
+                    ToggleButton(
+                        checked = themeMode == mode,
+                        onCheckedChange = {
+                            themeMode = mode
+                            SettingsRepository.setThemeMode(mode)
+                            onThemeModeChange(mode)
+                        },
+                        modifier = Modifier.weight(1f),
+                        shapes = when (index) {
+                            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                            themeOptions.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                        },
+                    ) {
+                        Icon(
+                            painter = painterResource(id = themeIcons[index]),
+                            contentDescription = mode.name
+                        )
                     }
                 }
             }

@@ -48,7 +48,6 @@ import androidx.compose.ui.unit.dp
 import com.sameerasw.canvas.ui.drawing.BitmapStorageHelper
 import com.sameerasw.canvas.ui.drawing.StrokeDrawer.drawScribbleStroke
 import com.sameerasw.canvas.ui.drawing.TextDrawer.drawStringWithFont
-import com.sameerasw.canvas.ui.theme.CanvasTheme
 import com.sameerasw.canvas.utils.HapticUtil
 import com.sameerasw.canvas.model.DrawStroke
 import com.sameerasw.canvas.data.TextItem
@@ -78,7 +77,20 @@ class CropActivity : ComponentActivity() {
 
         @OptIn(ExperimentalMaterial3ExpressiveApi::class)
         setContent {
-            CanvasTheme {
+            val themeMode = remember { mutableStateOf(SettingsRepository.getThemeMode()) }
+
+            // Monitor theme changes from settings
+            LaunchedEffect(Unit) {
+                while (true) {
+                    kotlinx.coroutines.delay(500)
+                    val currentTheme = SettingsRepository.getThemeMode()
+                    if (currentTheme != themeMode.value) {
+                        themeMode.value = currentTheme
+                    }
+                }
+            }
+
+            com.sameerasw.canvas.ui.theme.CanvasThemeWithMode(themeMode = themeMode.value) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -434,7 +446,6 @@ class CropActivity : ComponentActivity() {
         }
     }
 }
-
 // Compute and return the cropped bitmap, rendering strokes and texts in the crop region
 private suspend fun performCropAndCreateBitmap(
     overlayLeft: Float,

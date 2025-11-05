@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -67,7 +68,20 @@ class MainActivity : ComponentActivity() {
         SettingsRepository.init(this)
         enableEdgeToEdge()
         setContent {
-            CanvasTheme {
+            val themeMode = remember { mutableStateOf(SettingsRepository.getThemeMode()) }
+
+            // Monitor theme changes from settings
+            LaunchedEffect(Unit) {
+                while (true) {
+                    kotlinx.coroutines.delay(500)
+                    val currentTheme = SettingsRepository.getThemeMode()
+                    if (currentTheme != themeMode.value) {
+                        themeMode.value = currentTheme
+                    }
+                }
+            }
+
+            com.sameerasw.canvas.ui.theme.CanvasThemeWithMode(themeMode = themeMode.value) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

@@ -11,6 +11,7 @@ object SettingsRepository {
     private const val KEY_HAPTICS_LEVEL = "haptics_level"
     private const val KEY_PIN_TOP_TOOLBAR = "pin_top_toolbar"
     private const val KEY_CANVAS_BACKGROUND = "canvas_background"
+    private const val KEY_THEME_MODE = "theme_mode"
 
     enum class HapticsLevel(val value: Int) {
         OFF(0),
@@ -29,6 +30,16 @@ object SettingsRepository {
 
         companion object {
             fun fromValue(v: Int) = CanvasBackgroundType.entries.firstOrNull { it.value == v } ?: NONE
+        }
+    }
+
+    enum class ThemeMode(val value: Int) {
+        LIGHT(0),
+        DYNAMIC(1),
+        DARK(2);
+
+        companion object {
+            fun fromValue(v: Int) = ThemeMode.entries.firstOrNull { it.value == v } ?: DYNAMIC
         }
     }
 
@@ -67,5 +78,15 @@ object SettingsRepository {
 
     fun setCanvasBackground(background: CanvasBackgroundType) {
         prefs?.edit()?.putInt(KEY_CANVAS_BACKGROUND, background.value)?.apply()
+    }
+
+    // Theme mode setting (DYNAMIC by default)
+    fun getThemeMode(): ThemeMode {
+        val p = prefs ?: return ThemeMode.DYNAMIC
+        return ThemeMode.fromValue(p.getInt(KEY_THEME_MODE, ThemeMode.DYNAMIC.value))
+    }
+
+    fun setThemeMode(theme: ThemeMode) {
+        prefs?.edit()?.putInt(KEY_THEME_MODE, theme.value)?.apply()
     }
 }

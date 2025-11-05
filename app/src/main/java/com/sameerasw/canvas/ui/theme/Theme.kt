@@ -55,3 +55,31 @@ fun CanvasTheme(
         content = content
     )
 }
+
+@Composable
+fun CanvasThemeWithMode(
+    themeMode: com.sameerasw.canvas.SettingsRepository.ThemeMode = com.sameerasw.canvas.SettingsRepository.ThemeMode.DYNAMIC,
+    content: @Composable () -> Unit
+) {
+    val systemDarkTheme = isSystemInDarkTheme()
+
+    val isDarkTheme = when (themeMode) {
+        com.sameerasw.canvas.SettingsRepository.ThemeMode.LIGHT -> false
+        com.sameerasw.canvas.SettingsRepository.ThemeMode.DARK -> true
+        com.sameerasw.canvas.SettingsRepository.ThemeMode.DYNAMIC -> systemDarkTheme
+    }
+
+    val colorScheme = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val context = LocalContext.current
+        if (isDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    } else {
+        if (isDarkTheme) DarkColorScheme else LightColorScheme
+    }
+
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = Typography,
+        content = content
+    )
+}
+
