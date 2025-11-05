@@ -27,7 +27,9 @@ fun ToolbarFloating(
     onHandTool: () -> Unit,
     onPenTool: () -> Unit,
     onEraserTool: () -> Unit,
-    onTextTool: () -> Unit
+    onTextTool: () -> Unit,
+    onArrowTool: () -> Unit,
+    onShapeTool: () -> Unit
 ) {
     HorizontalFloatingToolbar(
         modifier = Modifier,
@@ -77,6 +79,8 @@ fun ToolbarFloating(
                             ToolType.PEN -> R.drawable.rounded_stylus_fountain_pen_24
                             ToolType.ERASER -> R.drawable.rounded_ink_eraser_24
                             ToolType.TEXT -> R.drawable.rounded_text_fields_24
+                            ToolType.ARROW -> R.drawable.rounded_back_hand_24
+                            ToolType.SHAPE -> R.drawable.rounded_back_hand_24
                         }
                     ),
                     contentDescription = "Toggle toolbar",
@@ -106,7 +110,36 @@ fun ToolbarFloating(
 
             Spacer(modifier = Modifier.width(if (expanded) 4.dp else (-4).dp))
 
-            // Text tool
+            IconButton(
+                modifier = Modifier.width(if (expanded) 64.dp else 48.dp).then(if (currentTool == ToolType.ARROW) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier),
+                onClick = onArrowTool
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.rounded_back_hand_24),
+                    contentDescription = "Arrow tool",
+                    tint = if (currentTool == ToolType.ARROW) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(if (expanded) 28.dp else 24.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(if (expanded) 4.dp else (-4).dp))
+
+            IconButton(
+                modifier = Modifier.width(if (expanded) 64.dp else 48.dp).then(if (currentTool == ToolType.SHAPE) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier),
+                onClick = onShapeTool
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.rounded_back_hand_24),
+                    contentDescription = "Shape tool",
+                    tint = if (currentTool == ToolType.SHAPE) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(if (expanded) 28.dp else 24.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(if (expanded) 4.dp else (-4).dp))
+
             IconButton(
                 modifier = Modifier.width(if (expanded) 64.dp else 48.dp).then(if (currentTool == ToolType.TEXT) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier),
                 onClick = onTextTool

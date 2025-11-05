@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import com.sameerasw.canvas.model.DrawStroke
 import com.sameerasw.canvas.model.ToolType
 import com.sameerasw.canvas.data.TextItem
+import com.sameerasw.canvas.ui.drawing.StrokeDrawer
 import com.sameerasw.canvas.ui.drawing.StrokeDrawer.drawScribbleStroke
 import com.sameerasw.canvas.ui.drawing.TextDrawer.drawStringWithFont
 import com.sameerasw.canvas.ui.drawing.BackgroundDrawer
@@ -40,6 +41,9 @@ fun DrawingCanvasScreen(
     texts: List<TextItem>,
     penWidth: Float,
     textSize: Float,
+    currentColor: androidx.compose.ui.graphics.Color,
+    currentPenStyle: com.sameerasw.canvas.model.PenStyle,
+    currentShapeType: com.sameerasw.canvas.model.ShapeType,
     modifier: Modifier = Modifier,
     onAddStroke: ((DrawStroke) -> Unit)? = null,
     onRemoveStroke: ((predicate: (DrawStroke) -> Boolean) -> Unit)? = null,
@@ -51,9 +55,10 @@ fun DrawingCanvasScreen(
     val haptics = LocalHapticFeedback.current
     val context = LocalContext.current
     val currentStroke = remember { mutableStateListOf<Offset>() }
-    val strokeColor = MaterialTheme.colorScheme.onBackground
+    val strokeColor = currentColor
     val themeColor = strokeColor.toArgb()
     val eraserRadius = 30f
+    val shapeStartPoint = remember { mutableStateOf<Offset?>(null) }
 
     val scale = remember { mutableStateOf(1f) }
     val offsetX = remember { mutableStateOf(0f) }
@@ -168,9 +173,45 @@ fun DrawingCanvasScreen(
                         change.consume()
                     },
                     onDragEnd = {
-                        if (currentTool == ToolType.PEN && currentStroke.size >= 2) {
-                            val newStroke = DrawStroke(currentStroke.toList(), strokeColor, width = penWidth)
-                            onAddStroke?.invoke(newStroke)
+                        when (currentTool) {
+                            ToolType.PEN -> {
+                                if (currentStroke.size >= 2) {
+                                    val newStroke = DrawStroke(
+                                        currentStroke.toList(),
+                                        strokeColor,
+                                        width = penWidth,
+                                        style = currentPenStyle
+                                    )
+                                    onAddStroke?.invoke(newStroke)
+                                }
+                            }
+                            ToolType.ARROW -> {
+                                if (currentStroke.size >= 2) {
+                                    val start = currentStroke.first()
+                                    val end = currentStroke.last()
+                                    val newStroke = DrawStroke(
+                                        listOf(start, end),
+                                        strokeColor,
+                                        width = penWidth,
+                                        isArrow = true
+                                    )
+                                    onAddStroke?.invoke(newStroke)
+                                }
+                            }
+                            ToolType.SHAPE -> {
+                                if (currentStroke.size >= 2) {
+                                    val start = currentStroke.first()
+                                    val end = currentStroke.last()
+                                    val newStroke = DrawStroke(
+                                        listOf(start, end),
+                                        strokeColor,
+                                        width = penWidth,
+                                        shapeType = currentShapeType
+                                    )
+                                    onAddStroke?.invoke(newStroke)
+                                }
+                            }
+                            else -> {}
                         }
                         drawingHapticJob.value?.cancel()
                         drawingHapticJob.value = null
@@ -178,6 +219,7 @@ fun DrawingCanvasScreen(
                         lastMoveTime.value = 0L
                         lastMovePos.value = Offset.Zero
                         currentStroke.clear()
+                        shapeStartPoint.value = null
                     },
                     onDragCancel = {
                         drawingHapticJob.value?.cancel()
@@ -186,6 +228,7 @@ fun DrawingCanvasScreen(
                         lastMoveTime.value = 0L
                         lastMovePos.value = Offset.Zero
                         currentStroke.clear()
+                        shapeStartPoint.value = null
                     }
                 )
             }
@@ -210,13 +253,16 @@ fun DrawingCanvasScreen(
                     onTap = { offset ->
                         val world = Offset((offset.x - offsetX.value) / scale.value, (offset.y - offsetY.value) / scale.value)
 
-                        if (currentTool == ToolType.PEN) {
-                            val delta = 0.5f
-                            val p1 = world
-                            val p2 = Offset(world.x + delta, world.y + delta)
-                            onAddStroke?.invoke(DrawStroke(listOf(p1, p2), strokeColor, width = penWidth))
-                            HapticUtil.performClick(haptics)
-                            return@detectTapGestures
+                        when (currentTool) {
+                            ToolType.PEN -> {
+                                val delta = 0.5f
+                                val p1 = world
+                                val p2 = Offset(world.x + delta, world.y + delta)
+                                onAddStroke?.invoke(DrawStroke(listOf(p1, p2), strokeColor, width = penWidth, style = currentPenStyle))
+                                HapticUtil.performClick(haptics)
+                                return@detectTapGestures
+                            }
+                            else -> {}
                         }
 
                         if (currentTool == ToolType.TEXT) {
@@ -237,7 +283,17 @@ fun DrawingCanvasScreen(
 
         strokes.forEach { stroke ->
             val screenPoints = stroke.points.map { world -> Offset(world.x * scale.value + offsetX.value, world.y * scale.value + offsetY.value) }
-            if (screenPoints.size >= 2) drawScribbleStroke(screenPoints, strokeColor, stroke.width * scale.value)
+            when {
+                stroke.isArrow && screenPoints.size >= 2 -> {
+                    StrokeDrawer.drawArrow(screenPoints.first(), screenPoints.last(), stroke.color, stroke.width * scale.value)
+                }
+                stroke.shapeType != null && screenPoints.size >= 2 -> {
+                    StrokeDrawer.drawShape(screenPoints.first(), screenPoints.last(), stroke.shapeType, stroke.color, stroke.width * scale.value)
+                }
+                screenPoints.size >= 2 -> {
+                    drawScribbleStroke(screenPoints, stroke.color, stroke.width * scale.value, stroke.style)
+                }
+            }
         }
 
         texts.forEach { t ->
@@ -247,15 +303,35 @@ fun DrawingCanvasScreen(
             drawStringWithFont(context, t.text, sx, sy, fontSize, themeColor)
         }
 
-        if (currentTool == ToolType.PEN && currentStroke.size >= 2) {
-            val screenPoints = currentStroke.map { world -> Offset(world.x * scale.value + offsetX.value, world.y * scale.value + offsetY.value) }
-            drawScribbleStroke(screenPoints, strokeColor, penWidth * scale.value)
-        }
-
-        if (currentTool == ToolType.ERASER && currentStroke.isNotEmpty()) {
-            val last = currentStroke.last()
-            val center = Offset(last.x * scale.value + offsetX.value, last.y * scale.value + offsetY.value)
-            drawCircle(color = strokeColor.copy(alpha = 0.3f), radius = eraserRadius, center = center)
+        when (currentTool) {
+            ToolType.PEN -> {
+                if (currentStroke.size >= 2) {
+                    val screenPoints = currentStroke.map { world -> Offset(world.x * scale.value + offsetX.value, world.y * scale.value + offsetY.value) }
+                    drawScribbleStroke(screenPoints, strokeColor, penWidth * scale.value, currentPenStyle)
+                }
+            }
+            ToolType.ARROW -> {
+                if (currentStroke.size >= 2) {
+                    val start = Offset(currentStroke.first().x * scale.value + offsetX.value, currentStroke.first().y * scale.value + offsetY.value)
+                    val end = Offset(currentStroke.last().x * scale.value + offsetX.value, currentStroke.last().y * scale.value + offsetY.value)
+                    StrokeDrawer.drawArrow(start, end, strokeColor, penWidth * scale.value)
+                }
+            }
+            ToolType.SHAPE -> {
+                if (currentStroke.size >= 2) {
+                    val start = Offset(currentStroke.first().x * scale.value + offsetX.value, currentStroke.first().y * scale.value + offsetY.value)
+                    val end = Offset(currentStroke.last().x * scale.value + offsetX.value, currentStroke.last().y * scale.value + offsetY.value)
+                    StrokeDrawer.drawShape(start, end, currentShapeType, strokeColor, penWidth * scale.value)
+                }
+            }
+            ToolType.ERASER -> {
+                if (currentStroke.isNotEmpty()) {
+                    val last = currentStroke.last()
+                    val center = Offset(last.x * scale.value + offsetX.value, last.y * scale.value + offsetY.value)
+                    drawCircle(color = strokeColor.copy(alpha = 0.3f), radius = eraserRadius, center = center)
+                }
+            }
+            else -> {}
         }
     }
 }
