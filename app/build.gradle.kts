@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "com.sameerasw.canvas"
-        minSdk = 33
+        minSdk = 24
         targetSdk = 36
         versionCode = 3
         versionName = "1.2"
