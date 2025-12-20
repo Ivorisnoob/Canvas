@@ -29,6 +29,19 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
     private val _texts = MutableStateFlow<List<TextItem>>(emptyList())
     val texts = _texts.asStateFlow()
 
+    // Notes Role state
+    private val _stylusMode = MutableStateFlow(false)
+    val stylusMode = _stylusMode.asStateFlow()
+
+    private val _launchedFromLockScreen = MutableStateFlow(false)
+    val launchedFromLockScreen = _launchedFromLockScreen.asStateFlow()
+
+    private val _isFloatingWindow = MutableStateFlow(false)
+    val isFloatingWindow = _isFloatingWindow.asStateFlow()
+
+    private val _isNotesRoleHeld = MutableStateFlow(false)
+    val isNotesRoleHeld = _isNotesRoleHeld.asStateFlow()
+
     // Undo/Redo stacks hold CanvasModel snapshots
     private val undoStack = ArrayDeque<CanvasModel>()
     private val redoStack = ArrayDeque<CanvasModel>()
@@ -158,5 +171,22 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
         }
+    }
+
+    // Notes Role methods
+    fun setStylusMode(enabled: Boolean) {
+        _stylusMode.value = enabled
+    }
+
+    fun setLaunchedFromLockScreen(isLockScreen: Boolean) {
+        _launchedFromLockScreen.value = isLockScreen
+    }
+
+    fun setIsFloatingWindow(isFloating: Boolean) {
+        _isFloatingWindow.value = isFloating
+    }
+
+    fun setIsNotesRoleHeld(held: Boolean) {
+        _isNotesRoleHeld.value = held
     }
 }
